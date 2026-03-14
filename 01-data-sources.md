@@ -2,7 +2,7 @@
 
 ## 1. Ficheiros de Demo (.dem)
 
-Os ficheiros de demo do CS2 contêm toda a informação de uma partida, gravada tick-a-tick (64 ticks/segundo). São a fonte primária de dados da plataforma.
+Os ficheiros de demo do  CS2 contêm toda a informação de uma partida, gravada tick-a-tick (64 ticks/segundo). São a fonte primária de dados da plataforma.
 
 ### Dados Disponíveis num Ficheiro de Demo
 

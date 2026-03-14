@@ -1,0 +1,56 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+*.egg-info/
+dist/
+build/
+
+# Environment
+.env
+.env.local
+.env.production
+
+# Next.js
+.next/
+out/
+
+# Turbo
+.turbo/
+
+# IDE
+.vscode/settings.json
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# CS2 demos (large binary files)
+*.dem
+*.dem.gz
+
+# ML artifacts
+*.pt
+*.pth
+*.onnx
+mlruns/
+
+# Test coverage
+htmlcov/
+.coverage
+coverage.xml
+
+# Type checking
+.mypy_cache/
+.ruff_cache/
+
+# Docker volumes
+pgdata/
+chdata/
+miniodata/

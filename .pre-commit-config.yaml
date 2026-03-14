@@ -1,0 +1,30 @@
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-json
+      - id: check-added-large-files
+        args: ['--maxkb=5000']
+
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.15.5
+    hooks:
+      - id: ruff
+        args: ['--fix']
+        files: ^packages/backend/
+      - id: ruff-format
+        files: ^packages/backend/
+
+  - repo: https://github.com/pre-commit/mirrors-eslint
+    rev: v9.27.0
+    hooks:
+      - id: eslint
+        files: ^packages/frontend/.*\.[jt]sx?$
+        additional_dependencies:
+          - eslint@9.27.0
+          - eslint-config-next@15.3.2
+          - '@eslint/eslintrc@3.3.1'
+          - typescript@5.8.3
