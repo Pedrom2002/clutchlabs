@@ -45,10 +45,17 @@ async def get_test_db() -> AsyncGenerator[AsyncSession, None]:
 
 @pytest_asyncio.fixture
 async def client():
+    import src.database as db_module
     from src.database import get_db
     from src.main import app
 
     app.dependency_overrides[get_db] = get_test_db
+
+    # Patch engine/session factory so Celery helper functions use test DB
+    original_get_engine = db_module._get_engine
+    original_get_session_factory = db_module._get_session_factory
+    db_module._get_engine = lambda: test_engine
+    db_module._get_session_factory = lambda: TestSessionLocal
 
     async with AsyncClient(
         transport=ASGITransport(app=app),
@@ -57,3 +64,5 @@ async def client():
         yield ac
 
     app.dependency_overrides.clear()
+    db_module._get_engine = original_get_engine
+    db_module._get_session_factory = original_get_session_factory
