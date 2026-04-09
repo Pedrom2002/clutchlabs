@@ -31,27 +31,18 @@ def generate_from_demo(dem_path: Path, output_dir: Path) -> int:
 
     Returns number of windows generated.
     """
-    # Import parser — add backend to path if needed
-    backend_src = dem_path.parent
-    while backend_src.name != "packages" and backend_src != backend_src.parent:
-        backend_src = backend_src.parent
-    backend_path = backend_src / "backend"
-    if backend_path.exists() and str(backend_path) not in sys.path:
-        sys.path.insert(0, str(backend_path))
+    # Import parser and feature extractor from backend
+    # Must have backend/src in sys.path BEFORE ml-models/src
+    ml_models_root = Path(__file__).resolve().parent.parent.parent
+    backend_path = str(ml_models_root.parent / "backend")
+    if backend_path not in sys.path:
+        sys.path.insert(0, backend_path)
 
     try:
         from src.services.demo_parser import parse_demo
-        from src.services.ml_feature_extractor import (
-            PlayerDeathEvent,
-            TickSnapshot,
-            extract_positioning_windows,
-            label_positioning_from_parsed_data,
-        )
-    except ImportError:
-        logger.error(
-            "Cannot import parser/feature extractor. "
-            "Run from packages/ml-models with backend in PYTHONPATH."
-        )
+        from src.services.ml_feature_extractor import label_positioning_from_parsed_data
+    except ImportError as e:
+        logger.error("Cannot import parser/feature extractor: %s", e)
         return 0
 
     # Parse demo

@@ -193,10 +193,13 @@ async def _run_ml_pipeline(match_id: str, org_id: uuid.UUID, parsed) -> int:
         total_rounds=parsed.total_rounds,
     )
 
-    # Run ML analysis (heuristic baseline for now)
+    # Run ML analysis — auto-detects trained models
     results = run_ml_analysis(
         death_events=death_events,
-        utility_features=[],  # TODO: extract grenade events when available in awpy
+        utility_features=[],
+        raw_kills=parsed.raw_kills,
+        raw_ticks=parsed.raw_ticks,
+        trade_sids=parsed.trade_kill_victim_sids,
     )
 
     if not results:

@@ -58,12 +58,12 @@ class MambaConfig:
     """Configuration for the Mamba-based positioning model."""
 
     d_input: int = NUM_FEATURES  # 18
-    d_model: int = 128
-    d_state: int = 16
+    d_model: int = 64
+    d_state: int = 8
     d_conv: int = 4
     expand: int = 2
     n_layers: int = 2
-    dropout: float = 0.1
+    dropout: float = 0.25
     num_classes: int = NUM_CLASSES
     seq_len: int = SEQ_LEN
 
@@ -194,7 +194,7 @@ class PositioningMamba(nn.Module):
     Mamba-based model for positioning error detection.
 
     Architecture:
-        LinearProj(18→128) → MambaBlock×2 → GlobalAvgPool → MLP(128→64→3)
+        LinearProj(18→64) → MambaBlock×2 → GlobalAvgPool → MLP(64→32→3)
     """
 
     def __init__(self, config: MambaConfig | None = None):
@@ -219,10 +219,10 @@ class PositioningMamba(nn.Module):
 
         # Classification head
         self.classifier = nn.Sequential(
-            nn.Linear(config.d_model, 64),
+            nn.Linear(config.d_model, 32),
             nn.ReLU(),
             nn.Dropout(config.dropout),
-            nn.Linear(64, config.num_classes),
+            nn.Linear(32, config.num_classes),
         )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
