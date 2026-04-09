@@ -1,6 +1,19 @@
 from pydantic import BaseModel
 
 
+class PlayerListItemResponse(BaseModel):
+    """Summary player info for list view."""
+
+    player_steam_id: str
+    player_name: str
+    total_matches: int
+    total_kills: int
+    total_deaths: int
+    kd_ratio: float
+    avg_adr: float
+    avg_rating: float | None = None
+
+
 class PlayerAggregatedStatsResponse(BaseModel):
     """Aggregated player stats across all matches in the org."""
 

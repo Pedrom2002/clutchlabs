@@ -108,3 +108,20 @@ jobs:
       - run: pnpm install --frozen-lockfile
         working-directory: .
       - run: pnpm build
+
+  ml-models-test:
+    name: ML Models Test
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: packages/ml-models
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          version: "latest"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: uv sync --extra dev
+      - run: uv run pytest tests/ -v --tb=short

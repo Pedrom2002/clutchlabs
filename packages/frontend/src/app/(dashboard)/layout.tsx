@@ -3,6 +3,7 @@
 import { useRouter } from 'next/navigation'
 import { useEffect } from 'react'
 import { ErrorBoundary } from '@/components/error-boundary'
+import { ToastProvider } from '@/components/common/toast-provider'
 import { Sidebar } from '@/components/layout/sidebar'
 import { Header } from '@/components/layout/header'
 import { useAuthStore } from '@/stores/auth-store'
@@ -30,14 +31,16 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   if (!isAuthenticated) return null
 
   return (
-    <div className="flex min-h-screen">
-      <Sidebar />
-      <div className="flex-1 flex flex-col">
-        <Header />
-        <main className="flex-1 p-4 md:p-6">
-          <ErrorBoundary>{children}</ErrorBoundary>
-        </main>
+    <ToastProvider>
+      <div className="flex min-h-screen">
+        <Sidebar />
+        <div className="flex-1 flex flex-col">
+          <Header />
+          <main className="flex-1 p-4 md:p-6">
+            <ErrorBoundary>{children}</ErrorBoundary>
+          </main>
+        </div>
       </div>
-    </div>
+    </ToastProvider>
   )
 }

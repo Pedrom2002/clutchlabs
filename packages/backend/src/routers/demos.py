@@ -1,9 +1,12 @@
 import math
 import uuid
 
-from fastapi import APIRouter, Depends, Query, UploadFile
+from fastapi import APIRouter, Depends, Query, Request, UploadFile
+from slowapi import Limiter
+from slowapi.util import get_remote_address
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.config import settings
 from src.database import get_db
 from src.middleware.auth import get_current_user
 from src.models.demo import DemoStatus
@@ -17,10 +20,13 @@ from src.schemas.demo import (
 from src.services import demo_service
 
 router = APIRouter(prefix="/demos", tags=["demos"])
+limiter = Limiter(key_func=get_remote_address)
 
 
 @router.post("", response_model=DemoResponse, status_code=201)
+@limiter.limit(settings.RATE_LIMIT_UPLOAD)
 async def upload_demo(
+    request: Request,
     file: UploadFile,
     current_user: TokenPayload = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),

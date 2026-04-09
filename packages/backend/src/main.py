@@ -1,12 +1,28 @@
+import logging
+import uuid
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+from slowapi.util import get_remote_address
 
 from src.config import settings
 from src.exceptions import http_exception_handler, validation_exception_handler
 from src.routers import auth, beta, billing, demos, health, heatmap, ml, players, pro_matches, sse
+
+# Structured logging
+logging.basicConfig(
+    level=getattr(logging, settings.LOG_LEVEL.upper(), logging.INFO),
+    format="%(asctime)s %(levelname)s [%(name)s] %(message)s"
+    if settings.LOG_FORMAT == "text"
+    else '{"time":"%(asctime)s","level":"%(levelname)s","logger":"%(name)s","message":"%(message)s"}',
+)
+
+# Rate limiter
+limiter = Limiter(key_func=get_remote_address, default_limits=[settings.RATE_LIMIT_DEFAULT])
 
 
 @asynccontextmanager
@@ -28,6 +44,10 @@ app = FastAPI(
     redoc_url="/redoc" if settings.ENVIRONMENT == "dev" else None,
 )
 
+# Rate limiting
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
 # CORS
 app.add_middleware(
     CORSMiddleware,
@@ -36,6 +56,16 @@ app.add_middleware(
     allow_methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
     allow_headers=["Content-Type", "Authorization"],
 )
+
+
+# Request ID middleware
+@app.middleware("http")
+async def add_request_id(request: Request, call_next) -> Response:
+    request_id = request.headers.get("X-Request-ID", str(uuid.uuid4()))
+    response: Response = await call_next(request)
+    response.headers["X-Request-ID"] = request_id
+    return response
+
 
 # Exception handlers
 app.add_exception_handler(HTTPException, http_exception_handler)

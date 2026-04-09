@@ -4,7 +4,7 @@ services:
     environment:
       POSTGRES_DB: cs2analytics
       POSTGRES_USER: cs2user
-      POSTGRES_PASSWORD: localdev123
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-localdev123}
     ports:
       - "5432:5432"
     volumes:
@@ -20,7 +20,7 @@ services:
     environment:
       CLICKHOUSE_DB: cs2analytics
       CLICKHOUSE_USER: cs2user
-      CLICKHOUSE_PASSWORD: localdev123
+      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:-localdev123}
     ports:
       - "8123:8123"
       - "9000:9000"

@@ -10,15 +10,24 @@ import os
 import sys
 from datetime import datetime
 
+from src.config import settings
 from src.tasks.celery_app import celery_app
 
 logger = logging.getLogger(__name__)
 
-# Default FACEIT hub IDs for CS2 (EU Premium, NA Premium)
-FACEIT_HUB_IDS = os.environ.get(
-    "FACEIT_HUB_IDS",
-    "",
-).split(",")
+
+def _get_ingester_path() -> str:
+    """Get the path to the pro-demo-ingester package."""
+    return os.path.normpath(
+        os.path.join(os.path.dirname(__file__), "..", "..", "..", "pro-demo-ingester")
+    )
+
+
+def _ensure_ingester_importable():
+    """Add pro-demo-ingester to sys.path if not already present."""
+    ingester_path = _get_ingester_path()
+    if ingester_path not in sys.path:
+        sys.path.insert(0, ingester_path)
 
 
 async def _check_pro_match_exists(source: str, source_match_id: str) -> bool:
@@ -74,57 +83,100 @@ async def _store_pro_match(
         return str(pro_match.id)
 
 
-@celery_app.task(name="src.tasks.pro_ingestion.ingest_hltv")
-def ingest_hltv():
-    """Periodic task: scrape recent HLTV matches and store new ones.
-
-    Runs every 30 minutes via Celery Beat.
-    """
-    logger.info("Starting HLTV pro demo ingestion")
+async def _run_hltv_ingestion(pages: int = 2) -> int:
+    """Run HLTV match scraping and storage."""
+    _ensure_ingester_importable()
 
     try:
-        # Add pro-demo-ingester to path
-        ingester_path = os.path.join(
-            os.path.dirname(__file__), "..", "..", "..", "pro-demo-ingester"
-        )
-        if ingester_path not in sys.path:
-            sys.path.insert(0, ingester_path)
-
         from src.scrapers.hltv import HLTVScraper
+    except ImportError:
+        logger.error(
+            "Cannot import HLTVScraper. Ensure pro-demo-ingester package is installed: "
+            "pip install -e packages/pro-demo-ingester"
+        )
+        return 0
 
-        async def _run():
-            scraper = HLTVScraper()
-            matches = await scraper.get_recent_matches(pages=2)
+    scraper = HLTVScraper()
+    matches = await scraper.get_recent_matches(pages=pages)
 
-            new_count = 0
-            for match in matches:
-                source_id = str(match.match_id)
+    new_count = 0
+    for match in matches:
+        source_id = str(match.match_id)
+        if await _check_pro_match_exists("hltv", source_id):
+            continue
 
-                # Dedup
-                if await _check_pro_match_exists("hltv", source_id):
-                    continue
+        await _store_pro_match(
+            source="hltv",
+            source_match_id=source_id,
+            team1_name=match.team1_name,
+            team2_name=match.team2_name,
+            team1_score=match.team1_score,
+            team2_score=match.team2_score,
+            map_name=match.map_name,
+            event_name=match.event_name,
+            match_date=match.match_date,
+        )
+        new_count += 1
 
-                # Store
-                await _store_pro_match(
-                    source="hltv",
-                    source_match_id=source_id,
-                    team1_name=match.team1_name,
-                    team2_name=match.team2_name,
-                    team1_score=match.team1_score,
-                    team2_score=match.team2_score,
-                    map_name=match.map_name,
-                    event_name=match.event_name,
-                    match_date=match.match_date,
-                )
-                new_count += 1
+    return new_count
 
-            logger.info(
-                "HLTV ingestion complete: %d new matches from %d total", new_count, len(matches)
+
+async def _run_faceit_ingestion() -> int:
+    """Run FACEIT match fetching and storage."""
+    hub_ids = [h.strip() for h in settings.FACEIT_HUB_IDS.split(",") if h.strip()]
+    if not hub_ids:
+        return 0
+
+    if not settings.FACEIT_API_KEY:
+        logger.debug("No FACEIT API key configured, skipping")
+        return 0
+
+    _ensure_ingester_importable()
+
+    try:
+        from src.clients.faceit import FACEITClient
+    except ImportError:
+        logger.error(
+            "Cannot import FACEITClient. Ensure pro-demo-ingester package is installed: "
+            "pip install -e packages/pro-demo-ingester"
+        )
+        return 0
+
+    client = FACEITClient(api_key=settings.FACEIT_API_KEY)
+    total_new = 0
+
+    for hub_id in hub_ids:
+        matches = await client.get_hub_matches(hub_id, limit=20)
+        for match in matches:
+            if match.status != "finished":
+                continue
+            if await _check_pro_match_exists("faceit", match.match_id):
+                continue
+
+            await _store_pro_match(
+                source="faceit",
+                source_match_id=match.match_id,
+                team1_name=match.team1_name,
+                team2_name=match.team2_name,
+                team1_score=match.team1_score,
+                team2_score=match.team2_score,
+                map_name=match.map_name,
+                event_name=None,
+                match_date=match.match_date,
             )
-            return new_count
+            total_new += 1
 
-        return asyncio.run(_run())
+    return total_new
 
+
+@celery_app.task(name="src.tasks.pro_ingestion.ingest_hltv")
+def ingest_hltv():
+    """Periodic task: scrape recent HLTV matches and store new ones."""
+    logger.info("Starting HLTV pro demo ingestion")
+    try:
+        new_count = asyncio.run(_run_hltv_ingestion(pages=2))
+        logger.info("HLTV ingestion complete: %d new matches", new_count)
+        return new_count
     except Exception as exc:
         logger.exception("HLTV ingestion failed")
         return {"error": str(exc)}
@@ -132,62 +184,12 @@ def ingest_hltv():
 
 @celery_app.task(name="src.tasks.pro_ingestion.ingest_faceit")
 def ingest_faceit():
-    """Periodic task: fetch recent FACEIT matches and store new ones.
-
-    Runs every 30 minutes via Celery Beat.
-    Requires FACEIT_API_KEY and FACEIT_HUB_IDS environment variables.
-    """
-    if not FACEIT_HUB_IDS or FACEIT_HUB_IDS == [""]:
-        logger.debug("No FACEIT hub IDs configured, skipping")
-        return {"skipped": True}
-
+    """Periodic task: fetch recent FACEIT matches and store new ones."""
     logger.info("Starting FACEIT pro demo ingestion")
-
     try:
-        ingester_path = os.path.join(
-            os.path.dirname(__file__), "..", "..", "..", "pro-demo-ingester"
-        )
-        if ingester_path not in sys.path:
-            sys.path.insert(0, ingester_path)
-
-        from src.clients.faceit import FACEITClient
-
-        async def _run():
-            client = FACEITClient()
-            total_new = 0
-
-            for hub_id in FACEIT_HUB_IDS:
-                hub_id = hub_id.strip()
-                if not hub_id:
-                    continue
-
-                matches = await client.get_hub_matches(hub_id, limit=20)
-
-                for match in matches:
-                    if match.status != "finished":
-                        continue
-
-                    if await _check_pro_match_exists("faceit", match.match_id):
-                        continue
-
-                    await _store_pro_match(
-                        source="faceit",
-                        source_match_id=match.match_id,
-                        team1_name=match.team1_name,
-                        team2_name=match.team2_name,
-                        team1_score=match.team1_score,
-                        team2_score=match.team2_score,
-                        map_name=match.map_name,
-                        event_name=None,
-                        match_date=match.match_date,
-                    )
-                    total_new += 1
-
-            logger.info("FACEIT ingestion complete: %d new matches", total_new)
-            return total_new
-
-        return asyncio.run(_run())
-
+        total_new = asyncio.run(_run_faceit_ingestion())
+        logger.info("FACEIT ingestion complete: %d new matches", total_new)
+        return total_new
     except Exception as exc:
         logger.exception("FACEIT ingestion failed")
         return {"error": str(exc)}
@@ -199,52 +201,13 @@ def backfill_hltv(pages: int = 30):
 
     Usage:
         from src.tasks.pro_ingestion import backfill_hltv
-        backfill_hltv.delay(pages=30)  # ~30 pages × 50 matches = ~1500 matches
-
-    Or from CLI:
-        celery -A src.tasks.celery_app call src.tasks.pro_ingestion.backfill_hltv --args='[30]'
+        backfill_hltv.delay(pages=30)
     """
     logger.info("Starting HLTV backfill (%d pages)", pages)
-
     try:
-        ingester_path = os.path.join(
-            os.path.dirname(__file__), "..", "..", "..", "pro-demo-ingester"
-        )
-        if ingester_path not in sys.path:
-            sys.path.insert(0, ingester_path)
-
-        from src.scrapers.hltv import HLTVScraper
-
-        async def _run():
-            scraper = HLTVScraper()
-            matches = await scraper.get_recent_matches(pages=pages)
-
-            new_count = 0
-            for match in matches:
-                source_id = str(match.match_id)
-                if await _check_pro_match_exists("hltv", source_id):
-                    continue
-
-                await _store_pro_match(
-                    source="hltv",
-                    source_match_id=source_id,
-                    team1_name=match.team1_name,
-                    team2_name=match.team2_name,
-                    team1_score=match.team1_score,
-                    team2_score=match.team2_score,
-                    map_name=match.map_name,
-                    event_name=match.event_name,
-                    match_date=match.match_date,
-                )
-                new_count += 1
-
-            logger.info(
-                "HLTV backfill complete: %d new matches from %d total", new_count, len(matches)
-            )
-            return new_count
-
-        return asyncio.run(_run())
-
+        new_count = asyncio.run(_run_hltv_ingestion(pages=pages))
+        logger.info("HLTV backfill complete: %d new matches", new_count)
+        return new_count
     except Exception as exc:
         logger.exception("HLTV backfill failed")
         return {"error": str(exc)}

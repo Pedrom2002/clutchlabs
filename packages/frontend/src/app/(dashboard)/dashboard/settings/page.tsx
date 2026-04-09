@@ -1,15 +1,11 @@
 'use client'
 
-import { useState } from 'react'
-import {
-  CreditCard,
-  Settings,
-  Shield,
-  UserPlus,
-  Users,
-} from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { CreditCard, Settings, Shield, UserPlus, Users } from 'lucide-react'
+import { api, ApiError } from '@/lib/api-client'
+import { useAuthStore } from '@/stores/auth-store'
+import { useToast } from '@/components/common/toast-provider'
 
-// Pricing tiers
 const TIERS = [
   { id: 'free', name: 'Free', price: 0, demos: 10, seats: 1 },
   { id: 'solo', name: 'Solo', price: 9, demos: 15, seats: 1 },
@@ -19,11 +15,16 @@ const TIERS = [
 
 export default function SettingsPage() {
   const [activeTab, setActiveTab] = useState<'general' | 'team' | 'billing'>('general')
-  const [orgName, setOrgName] = useState('')
+  const { organization } = useAuthStore()
+  const [orgName, setOrgName] = useState(organization?.name || '')
   const [inviteEmail, setInviteEmail] = useState('')
-  const [currentTier] = useState('free')
+  const currentTier = organization?.tier || 'free'
   const [saving, setSaving] = useState(false)
-  const [message, setMessage] = useState<string | null>(null)
+  const toast = useToast()
+
+  useEffect(() => {
+    if (organization?.name) setOrgName(organization.name)
+  }, [organization])
 
   const tabs = [
     { id: 'general' as const, label: 'General', icon: Settings },
@@ -33,12 +34,11 @@ export default function SettingsPage() {
 
   const handleSaveOrg = async () => {
     setSaving(true)
-    setMessage(null)
     try {
-      // In production: PUT /api/v1/org to update org name
-      setMessage('Settings saved successfully')
-    } catch {
-      setMessage('Failed to save settings')
+      await api.put('/org', { name: orgName })
+      toast.success('Settings saved successfully')
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : 'Failed to save settings')
     } finally {
       setSaving(false)
     }
@@ -47,13 +47,12 @@ export default function SettingsPage() {
   const handleInvite = async () => {
     if (!inviteEmail) return
     setSaving(true)
-    setMessage(null)
     try {
-      // In production: POST /api/v1/auth/invite
-      setMessage(`Invitation sent to ${inviteEmail}`)
+      await api.post('/auth/invite', { email: inviteEmail })
+      toast.success(`Invitation sent to ${inviteEmail}`)
       setInviteEmail('')
-    } catch {
-      setMessage('Failed to send invitation')
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : 'Failed to send invitation')
     } finally {
       setSaving(false)
     }
@@ -61,10 +60,23 @@ export default function SettingsPage() {
 
   const handleUpgrade = async (tierId: string) => {
     try {
-      // In production: POST /api/v1/billing/checkout → Stripe Checkout URL
-      setMessage(`Upgrade to ${tierId} — Stripe Checkout would open here`)
-    } catch {
-      setMessage('Failed to start checkout')
+      const data = await api.post<{ checkout_url: string }>(`/billing/checkout?tier=${tierId}`)
+      if (data.checkout_url) {
+        window.location.href = data.checkout_url
+      }
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : 'Failed to start checkout')
+    }
+  }
+
+  const handleManageSubscription = async () => {
+    try {
+      const data = await api.post<{ portal_url: string }>('/billing/portal')
+      if (data.portal_url) {
+        window.location.href = data.portal_url
+      }
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : 'No active subscription')
     }
   }
 
@@ -75,11 +87,12 @@ export default function SettingsPage() {
         Settings
       </h1>
 
-      {/* Tabs */}
-      <div className="flex gap-1 mb-6 border-b border-border">
+      <div className="flex gap-1 mb-6 border-b border-border" role="tablist">
         {tabs.map((tab) => (
           <button
             key={tab.id}
+            role="tab"
+            aria-selected={activeTab === tab.id}
             onClick={() => setActiveTab(tab.id)}
             className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
               activeTab === tab.id
@@ -93,18 +106,14 @@ export default function SettingsPage() {
         ))}
       </div>
 
-      {message && (
-        <div className="mb-4 px-4 py-2 bg-primary/10 border border-primary/20 rounded-lg text-sm text-primary">
-          {message}
-        </div>
-      )}
-
-      {/* General Settings */}
       {activeTab === 'general' && (
         <div className="bg-bg-card border border-border rounded-xl p-6 space-y-4">
           <div>
-            <label className="block text-sm font-medium text-text-muted mb-1">Organization Name</label>
+            <label htmlFor="org-name" className="block text-sm font-medium text-text-muted mb-1">
+              Organization Name
+            </label>
             <input
+              id="org-name"
               type="text"
               value={orgName}
               onChange={(e) => setOrgName(e.target.value)}
@@ -113,8 +122,13 @@ export default function SettingsPage() {
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-text-muted mb-1">Timezone</label>
-            <select className="px-3 py-2 bg-bg-elevated border border-border rounded-lg text-sm focus:outline-none focus:border-primary">
+            <label htmlFor="timezone" className="block text-sm font-medium text-text-muted mb-1">
+              Timezone
+            </label>
+            <select
+              id="timezone"
+              className="px-3 py-2 bg-bg-elevated border border-border rounded-lg text-sm focus:outline-none focus:border-primary"
+            >
               <option value="UTC">UTC</option>
               <option value="Europe/Lisbon">Europe/Lisbon</option>
               <option value="Europe/London">Europe/London</option>
@@ -133,7 +147,6 @@ export default function SettingsPage() {
         </div>
       )}
 
-      {/* Team Management */}
       {activeTab === 'team' && (
         <div className="space-y-4">
           <div className="bg-bg-card border border-border rounded-xl p-6">
@@ -147,6 +160,7 @@ export default function SettingsPage() {
                 value={inviteEmail}
                 onChange={(e) => setInviteEmail(e.target.value)}
                 placeholder="teammate@example.com"
+                aria-label="Email to invite"
                 className="flex-1 max-w-md px-3 py-2 bg-bg-elevated border border-border rounded-lg text-sm focus:outline-none focus:border-primary"
               />
               <button
@@ -171,7 +185,6 @@ export default function SettingsPage() {
         </div>
       )}
 
-      {/* Billing */}
       {activeTab === 'billing' && (
         <div className="space-y-4">
           <div className="bg-bg-card border border-border rounded-xl p-6 mb-4">
@@ -198,12 +211,16 @@ export default function SettingsPage() {
               >
                 <h3 className="font-bold text-lg">{tier.name}</h3>
                 <div className="text-2xl font-bold mt-1">
-                  {tier.price === 0 ? 'Free' : `€${tier.price}`}
-                  {tier.price > 0 && <span className="text-sm text-text-dim font-normal">/mo</span>}
+                  {tier.price === 0 ? 'Free' : `${tier.price}`}
+                  {tier.price > 0 && (
+                    <span className="text-sm text-text-dim font-normal">/mo</span>
+                  )}
                 </div>
                 <ul className="mt-3 space-y-1 text-xs text-text-muted">
                   <li>{tier.demos === -1 ? 'Unlimited demos' : `${tier.demos} demos/month`}</li>
-                  <li>{tier.seats} {tier.seats === 1 ? 'seat' : 'seats'}</li>
+                  <li>
+                    {tier.seats} {tier.seats === 1 ? 'seat' : 'seats'}
+                  </li>
                 </ul>
                 {tier.id !== currentTier && tier.id !== 'free' && (
                   <button
@@ -230,7 +247,10 @@ export default function SettingsPage() {
             <p className="text-text-dim text-sm mb-3">
               Manage your payment method, invoices, and subscription through Stripe.
             </p>
-            <button className="px-4 py-2 bg-bg-elevated border border-border rounded-lg text-sm hover:bg-bg-elevated/80">
+            <button
+              onClick={handleManageSubscription}
+              className="px-4 py-2 bg-bg-elevated border border-border rounded-lg text-sm hover:bg-bg-elevated/80"
+            >
               Open Customer Portal
             </button>
           </div>
