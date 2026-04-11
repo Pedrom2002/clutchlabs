@@ -123,69 +123,162 @@ async def create_portal_session(
         raise HTTPException(status_code=500, detail="Failed to create portal session") from e
 
 
+_PRICE_TO_TIER = {
+    settings.STRIPE_PRICE_SOLO: "solo",
+    settings.STRIPE_PRICE_TEAM: "team",
+    settings.STRIPE_PRICE_PRO: "pro",
+}
+
+
+def _tier_from_subscription_data(data: dict) -> str | None:
+    """Resolve a tier name from a Stripe subscription payload."""
+    try:
+        items = data.get("items", {}).get("data", [])
+        for item in items:
+            price_id = (item.get("price") or {}).get("id")
+            tier = _PRICE_TO_TIER.get(price_id)
+            if tier:
+                return tier
+    except (AttributeError, TypeError):
+        pass
+    return data.get("metadata", {}).get("tier") if isinstance(data.get("metadata"), dict) else None
+
+
+async def _update_org_by_customer(
+    db: AsyncSession,
+    customer_id: str | None,
+    **values,
+) -> None:
+    if not customer_id:
+        return
+    await db.execute(
+        update(Organization)
+        .where(Organization.stripe_customer_id == customer_id)
+        .values(**values)
+    )
+    await db.commit()
+
+
 @router.post("/webhook")
 async def stripe_webhook(
     request: Request,
     db: AsyncSession = Depends(get_db),
 ):
-    """Handle Stripe webhook events."""
+    """Handle Stripe webhook events with signature verification.
+
+    Handled event types:
+    - payment_intent.succeeded
+    - customer.subscription.created
+    - customer.subscription.updated
+    - customer.subscription.deleted
+    - invoice.paid
+    - checkout.session.completed (kept from prior implementation)
+
+    Returns 200 for handled/ignored events, 400 for invalid signatures.
+    """
     stripe = _get_stripe()
     payload = await request.body()
     sig_header = request.headers.get("stripe-signature", "")
+    webhook_secret = settings.STRIPE_WEBHOOK_SECRET
+
+    if not webhook_secret:
+        # Fail closed if signing secret not configured (mirrors Stripe SDK behavior)
+        raise HTTPException(status_code=400, detail="Webhook secret not configured")
 
     try:
-        event = stripe.Webhook.construct_event(payload, sig_header, settings.STRIPE_WEBHOOK_SECRET)
-    except (ValueError, Exception) as exc:
+        event = stripe.Webhook.construct_event(payload, sig_header, webhook_secret)
+    except Exception as exc:  # noqa: BLE001 — Stripe raises generic exceptions
+        logger.warning("Stripe webhook signature verification failed: %s", exc)
         raise HTTPException(status_code=400, detail="Invalid webhook signature") from exc
 
-    event_type = event["type"]
-    data = event["data"]["object"]
+    event_type = event.get("type", "")
+    data = event.get("data", {}).get("object", {}) or {}
 
-    if event_type == "checkout.session.completed":
-        org_id = data.get("client_reference_id") or data.get("metadata", {}).get("org_id")
-        tier = data.get("metadata", {}).get("tier", "solo")
-        customer_id = data.get("customer")
-        subscription_id = data.get("subscription")
-
-        if org_id:
-            await db.execute(
-                update(Organization)
-                .where(Organization.id == uuid.UUID(org_id))
-                .values(
-                    stripe_customer_id=customer_id,
-                    stripe_subscription_id=subscription_id,
-                    tier=tier,
-                    max_demos_per_month=TIER_LIMITS.get(tier, 10),
+    try:
+        if event_type == "checkout.session.completed":
+            org_id = data.get("client_reference_id") or data.get("metadata", {}).get("org_id")
+            tier = data.get("metadata", {}).get("tier", "solo")
+            customer_id = data.get("customer")
+            subscription_id = data.get("subscription")
+            if org_id:
+                await db.execute(
+                    update(Organization)
+                    .where(Organization.id == uuid.UUID(org_id))
+                    .values(
+                        stripe_customer_id=customer_id,
+                        stripe_subscription_id=subscription_id,
+                        tier=tier,
+                        subscription_status="active",
+                        max_demos_per_month=TIER_LIMITS.get(tier, 10),
+                    )
                 )
+                await db.commit()
+                logger.info("Activated subscription: org=%s tier=%s", org_id, tier)
+
+        elif event_type == "payment_intent.succeeded":
+            customer_id = data.get("customer")
+            logger.info("Payment succeeded: customer=%s amount=%s", customer_id, data.get("amount_received"))
+            await _update_org_by_customer(db, customer_id, subscription_status="active")
+
+        elif event_type == "customer.subscription.created":
+            customer_id = data.get("customer")
+            subscription_id = data.get("id")
+            status = data.get("status", "active")
+            tier = _tier_from_subscription_data(data) or "solo"
+            await _update_org_by_customer(
+                db,
+                customer_id,
+                stripe_subscription_id=subscription_id,
+                tier=tier,
+                subscription_status=status,
+                max_demos_per_month=TIER_LIMITS.get(tier, 10),
             )
-            await db.commit()
-            logger.info("Activated subscription: org=%s tier=%s", org_id, tier)
+            logger.info("Subscription created: customer=%s tier=%s", customer_id, tier)
 
-    elif event_type == "customer.subscription.updated":
-        customer_id = data.get("customer")
-        status = data.get("status")
-        if status == "active":
-            # Find org by customer_id and ensure tier is synced
-            result = await db.execute(
-                select(Organization).where(Organization.stripe_customer_id == customer_id)
+        elif event_type == "customer.subscription.updated":
+            customer_id = data.get("customer")
+            status = data.get("status", "active")
+            tier = _tier_from_subscription_data(data)
+            values: dict = {"subscription_status": status}
+            if tier:
+                values["tier"] = tier
+                values["max_demos_per_month"] = TIER_LIMITS.get(tier, 10)
+            await _update_org_by_customer(db, customer_id, **values)
+            logger.info(
+                "Subscription updated: customer=%s status=%s tier=%s",
+                customer_id,
+                status,
+                tier,
             )
-            org = result.scalar_one_or_none()
-            if org:
-                logger.info("Subscription updated: org=%s status=%s", org.id, status)
 
-    elif event_type == "customer.subscription.deleted":
-        customer_id = data.get("customer")
-        # Downgrade to free
-        await db.execute(
-            update(Organization)
-            .where(Organization.stripe_customer_id == customer_id)
-            .values(tier="free", max_demos_per_month=10, stripe_subscription_id=None)
-        )
-        await db.commit()
-        logger.info("Subscription cancelled, downgraded to free: customer=%s", customer_id)
+        elif event_type == "customer.subscription.deleted":
+            customer_id = data.get("customer")
+            await _update_org_by_customer(
+                db,
+                customer_id,
+                tier="free",
+                max_demos_per_month=TIER_LIMITS["free"],
+                stripe_subscription_id=None,
+                subscription_status="canceled",
+            )
+            logger.info("Subscription cancelled, downgraded to free: customer=%s", customer_id)
 
-    elif event_type == "invoice.payment_failed":
-        customer_id = data.get("customer")
-        logger.warning("Payment failed: customer=%s", customer_id)
+        elif event_type == "invoice.paid":
+            customer_id = data.get("customer")
+            await _update_org_by_customer(db, customer_id, subscription_status="active")
+            logger.info("Invoice paid: customer=%s", customer_id)
 
-    return {"status": "ok"}
+        elif event_type == "invoice.payment_failed":
+            customer_id = data.get("customer")
+            await _update_org_by_customer(db, customer_id, subscription_status="past_due")
+            logger.warning("Payment failed: customer=%s", customer_id)
+
+        else:
+            logger.debug("Ignoring Stripe event type: %s", event_type)
+
+    except Exception as exc:  # pragma: no cover — safety net
+        logger.exception("Error handling Stripe event %s: %s", event_type, exc)
+        # Still return 200 so Stripe does not keep retrying for handler bugs
+        return {"status": "error", "event": event_type}
+
+    return {"status": "ok", "event": event_type}

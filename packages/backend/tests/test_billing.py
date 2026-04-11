@@ -57,7 +57,17 @@ async def test_webhook_invalid_signature(client: AsyncClient):
         content=b'{"type": "test"}',
         headers={"stripe-signature": "invalid"},
     )
-    # Should fail with 400 (invalid sig) or 503 (stripe not installed)
+    # Should fail with 400 (invalid sig / missing secret) or 503 (stripe not installed)
+    assert resp.status_code in (400, 503)
+
+
+@pytest.mark.asyncio
+async def test_webhook_missing_signature_header(client: AsyncClient):
+    resp = await client.post(
+        "/api/v1/billing/webhook",
+        content=b'{"type": "payment_intent.succeeded"}',
+    )
+    # Without a stripe-signature header, verification must fail
     assert resp.status_code in (400, 503)
 
 
