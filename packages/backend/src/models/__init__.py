@@ -14,6 +14,7 @@ from src.models.player_match_stats import PlayerMatchStats
 from src.models.pro_match import ProMatch
 from src.models.refresh_token import RefreshToken
 from src.models.round import Round
+from src.models.scout_report import ScoutReport
 from src.models.team import Team
 from src.models.team_player import TeamPlayer
 from src.models.user import User
@@ -35,6 +36,7 @@ __all__ = [
     "PlayerMatchStats",
     "RefreshToken",
     "Round",
+    "ScoutReport",
     "Team",
     "TeamPlayer",
     "User",

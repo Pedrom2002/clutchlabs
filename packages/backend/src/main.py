@@ -11,9 +11,10 @@ from slowapi.util import get_remote_address
 
 from src.config import settings
 from src.exceptions import http_exception_handler, validation_exception_handler
+from src.middleware.metrics import metrics_response, prometheus_middleware
 from src.routers import (
     archetypes, auth, beta, billing, demos, health, heatmap, ml, players,
-    pro_matches, sse, win_prob,
+    pro_matches, scout, sse, tactics, win_prob,
 )
 
 # Structured logging
@@ -70,6 +71,16 @@ async def add_request_id(request: Request, call_next) -> Response:
     return response
 
 
+# Prometheus metrics middleware
+app.middleware("http")(prometheus_middleware)
+
+
+@app.get("/metrics", include_in_schema=False)
+async def metrics() -> Response:
+    """Prometheus metrics exposition endpoint."""
+    return metrics_response()
+
+
 # Exception handlers
 app.add_exception_handler(HTTPException, http_exception_handler)
 app.add_exception_handler(RequestValidationError, validation_exception_handler)
@@ -87,3 +98,5 @@ app.include_router(pro_matches.router, prefix="/api/v1")
 app.include_router(billing.router, prefix="/api/v1")
 app.include_router(win_prob.router, prefix="/api/v1")
 app.include_router(archetypes.router, prefix="/api/v1")
+app.include_router(tactics.router, prefix="/api/v1")
+app.include_router(scout.router, prefix="/api/v1")
