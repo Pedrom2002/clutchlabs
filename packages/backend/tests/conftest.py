@@ -1,5 +1,11 @@
 import asyncio
+import os
 from collections.abc import AsyncGenerator
+
+# Bump rate limits before importing app so decorators pick up the values
+os.environ.setdefault("RATE_LIMIT_AUTH", "10000/minute")
+os.environ.setdefault("RATE_LIMIT_UPLOAD", "10000/minute")
+os.environ.setdefault("RATE_LIMIT_DEFAULT", "10000/minute")
 
 import pytest
 import pytest_asyncio
