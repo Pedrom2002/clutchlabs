@@ -1,49 +1,137 @@
 @import "tailwindcss";
 
-@theme {
-  --color-bg: #0a0a0f;
-  --color-bg-card: #12121a;
-  --color-bg-elevated: #1a1a26;
-  --color-border: #2a2a3a;
-  --color-border-hover: #3a3a4f;
-  --color-text: #e8e8f0;
-  --color-text-muted: #8888a0;
-  --color-text-dim: #5a5a70;
-  --color-primary: #ff6b00;
-  --color-primary-hover: #ff8533;
-  --color-primary-dim: rgba(255, 107, 0, 0.15);
-  --color-accent: #00d4ff;
-  --color-accent-dim: rgba(0, 212, 255, 0.15);
-  --color-success: #22c55e;
-  --color-warning: #f59e0b;
-  --color-danger: #ef4444;
-  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
-  --font-mono: "JetBrains Mono", ui-monospace, monospace;
-}
+/* ────────────────────────────────────────────────────────────
+   Design tokens — shadcn-style HSL values + legacy aliases
+   so existing components keep working during the migration.
+──────────────────────────────────────────────────────────── */
 
-body {
-  background-color: var(--color-bg);
-  color: var(--color-text);
-  font-family: var(--font-sans);
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+@theme {
+  /* Semantic colors (HSL channels — used by shadcn components) */
+  --color-background: hsl(240 14% 5%);
+  --color-foreground: hsl(240 20% 92%);
+  --color-card: hsl(240 14% 8%);
+  --color-card-foreground: hsl(240 20% 92%);
+  --color-popover: hsl(240 14% 8%);
+  --color-popover-foreground: hsl(240 20% 92%);
+  --color-primary: hsl(24 100% 50%);
+  --color-primary-foreground: hsl(240 14% 5%);
+  --color-secondary: hsl(240 12% 14%);
+  --color-secondary-foreground: hsl(240 20% 92%);
+  --color-muted: hsl(240 12% 14%);
+  --color-muted-foreground: hsl(240 8% 60%);
+  --color-accent: hsl(192 100% 50%);
+  --color-accent-foreground: hsl(240 14% 5%);
+  --color-destructive: hsl(0 84% 60%);
+  --color-destructive-foreground: hsl(240 20% 92%);
+  --color-success: hsl(142 71% 45%);
+  --color-warning: hsl(38 92% 50%);
+  --color-border: hsl(240 12% 18%);
+  --color-input: hsl(240 12% 18%);
+  --color-ring: hsl(24 100% 50%);
+
+  /* Severity tokens for error analysis */
+  --color-severity-critical: hsl(0 84% 60%);
+  --color-severity-major: hsl(38 92% 50%);
+  --color-severity-minor: hsl(192 100% 50%);
+
+  /* Legacy aliases (still used by current components) */
+  --color-bg: hsl(240 14% 5%);
+  --color-bg-card: hsl(240 14% 8%);
+  --color-bg-elevated: hsl(240 12% 14%);
+  --color-border-hover: hsl(240 10% 25%);
+  --color-text: hsl(240 20% 92%);
+  --color-text-muted: hsl(240 8% 60%);
+  --color-text-dim: hsl(240 8% 40%);
+  --color-primary-hover: hsl(24 100% 60%);
+  --color-primary-dim: hsl(24 100% 50% / 0.15);
+  --color-accent-dim: hsl(192 100% 50% / 0.15);
+  --color-danger: hsl(0 84% 60%);
+
+  /* Radius scale */
+  --radius: 0.625rem;
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+
+  /* Typography */
+  --font-sans: var(--font-inter), "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-mono-jetbrains), "JetBrains Mono", ui-monospace, monospace;
+
+  /* Animation */
+  --animate-accordion-down: accordion-down 0.2s ease-out;
+  --animate-accordion-up: accordion-up 0.2s ease-out;
 }
 
 /* Light theme overrides */
+:root[data-theme="light"],
 .light {
-  --color-bg: #f5f5f7;
-  --color-bg-card: #ffffff;
-  --color-bg-elevated: #eeeef0;
-  --color-border: #d4d4da;
-  --color-border-hover: #b0b0ba;
-  --color-text: #1a1a2e;
-  --color-text-muted: #5a5a6e;
-  --color-text-dim: #8888a0;
-  --color-primary: #e05800;
-  --color-primary-hover: #c04a00;
-  --color-primary-dim: rgba(224, 88, 0, 0.12);
-  --color-accent: #0099cc;
-  --color-accent-dim: rgba(0, 153, 204, 0.12);
+  --color-background: hsl(0 0% 98%);
+  --color-foreground: hsl(240 20% 12%);
+  --color-card: hsl(0 0% 100%);
+  --color-card-foreground: hsl(240 20% 12%);
+  --color-popover: hsl(0 0% 100%);
+  --color-popover-foreground: hsl(240 20% 12%);
+  --color-primary: hsl(24 100% 42%);
+  --color-primary-foreground: hsl(0 0% 100%);
+  --color-secondary: hsl(240 6% 94%);
+  --color-secondary-foreground: hsl(240 20% 12%);
+  --color-muted: hsl(240 6% 94%);
+  --color-muted-foreground: hsl(240 8% 40%);
+  --color-accent: hsl(192 100% 38%);
+  --color-accent-foreground: hsl(0 0% 100%);
+  --color-destructive: hsl(0 75% 50%);
+  --color-destructive-foreground: hsl(0 0% 100%);
+  --color-border: hsl(240 6% 88%);
+  --color-input: hsl(240 6% 88%);
+  --color-ring: hsl(24 100% 42%);
+
+  --color-bg: hsl(0 0% 98%);
+  --color-bg-card: hsl(0 0% 100%);
+  --color-bg-elevated: hsl(240 6% 94%);
+  --color-border-hover: hsl(240 6% 75%);
+  --color-text: hsl(240 20% 12%);
+  --color-text-muted: hsl(240 8% 40%);
+  --color-text-dim: hsl(240 8% 60%);
+  --color-primary-hover: hsl(24 100% 35%);
+  --color-primary-dim: hsl(24 100% 42% / 0.12);
+  --color-accent-dim: hsl(192 100% 38% / 0.12);
+  --color-danger: hsl(0 75% 50%);
+}
+
+@layer base {
+  *,
+  *::before,
+  *::after {
+    border-color: var(--color-border);
+  }
+
+  body {
+    background-color: var(--color-background);
+    color: var(--color-foreground);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  /* Focus ring for keyboard nav */
+  :focus-visible {
+    outline: 2px solid var(--color-ring);
+    outline-offset: 2px;
+    border-radius: var(--radius-sm);
+  }
+
+  /* Reduce motion */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
 }
 
 ::selection {
@@ -53,15 +141,73 @@ body {
 
 /* Scrollbar */
 ::-webkit-scrollbar {
-  width: 6px;
+  width: 8px;
+  height: 8px;
 }
 ::-webkit-scrollbar-track {
-  background: var(--color-bg);
+  background: var(--color-background);
 }
 ::-webkit-scrollbar-thumb {
   background: var(--color-border);
-  border-radius: 3px;
+  border-radius: 4px;
 }
 ::-webkit-scrollbar-thumb:hover {
   background: var(--color-border-hover);
+}
+
+/* Animations used by Radix / shadcn components */
+@keyframes accordion-down {
+  from { height: 0; }
+  to { height: var(--radix-accordion-content-height); }
+}
+@keyframes accordion-up {
+  from { height: var(--radix-accordion-content-height); }
+  to { height: 0; }
+}
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes fade-out {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+@keyframes zoom-in {
+  from { opacity: 0; transform: scale(0.95); }
+  to { opacity: 1; transform: scale(1); }
+}
+@keyframes zoom-out {
+  from { opacity: 1; transform: scale(1); }
+  to { opacity: 0; transform: scale(0.95); }
+}
+@keyframes slide-in-from-top {
+  from { transform: translateY(-100%); }
+  to { transform: translateY(0); }
+}
+@keyframes slide-in-from-bottom {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}
+@keyframes slide-in-from-left {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(0); }
+}
+@keyframes slide-in-from-right {
+  from { transform: translateX(100%); }
+  to { transform: translateX(0); }
+}
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+.animate-shimmer {
+  background: linear-gradient(
+    90deg,
+    var(--color-muted) 0%,
+    var(--color-secondary) 50%,
+    var(--color-muted) 100%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 2s ease-in-out infinite;
 }

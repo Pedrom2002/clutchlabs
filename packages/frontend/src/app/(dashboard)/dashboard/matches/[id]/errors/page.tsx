@@ -1,274 +1,298 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
-import { useParams, useRouter } from 'next/navigation'
-import { AlertTriangle, ArrowLeft, ChevronRight, Filter, Loader2, Shield } from 'lucide-react'
-import { api, ApiError } from '@/lib/api-client'
-import type { DetectedError, MatchErrorsResponse } from '@/types/demo'
+import { useMemo, useState } from 'react'
+import { useParams } from 'next/navigation'
+import { useTranslations } from 'next-intl'
+import { useQuery } from '@tanstack/react-query'
+import { AlertTriangle, Filter, Sparkles } from 'lucide-react'
+import * as matchesApi from '@/lib/api/matches'
+import { QUERY_KEYS } from '@/lib/constants'
+import type { DetectedError } from '@/types/demo'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Badge, type BadgeProps } from '@/components/ui/badge'
+import { Skeleton } from '@/components/ui/skeleton'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
+import { ShapWaterfall } from '@/components/charts/shap-waterfall'
+import { useUrlState } from '@/hooks/use-url-state'
 
-function SeverityBadge({ severity }: { severity: string }) {
-  const colors: Record<string, string> = {
-    critical: 'bg-red-500/20 text-red-400 border-red-500/30',
-    minor: 'bg-amber-500/20 text-amber-400 border-amber-500/30',
-    info: 'bg-blue-500/20 text-blue-400 border-blue-500/30',
-  }
+const SEVERITY_VARIANT: Record<string, BadgeProps['variant']> = {
+  critical: 'critical',
+  major: 'major',
+  minor: 'minor',
+  info: 'minor',
+}
+
+function ErrorCard({
+  err,
+  active,
+  onClick,
+}: {
+  err: DetectedError
+  active: boolean
+  onClick: () => void
+}) {
   return (
-    <span className={`text-xs px-2 py-0.5 rounded border ${colors[severity] || 'bg-bg-elevated text-text-dim border-border'}`}>
-      {severity}
-    </span>
+    <button
+      onClick={onClick}
+      className={
+        'w-full rounded-lg border p-3 text-left transition-colors hover:border-primary/50 ' +
+        (active ? 'border-primary bg-primary/5' : 'border-border bg-card')
+      }
+    >
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <Badge variant={SEVERITY_VARIANT[err.severity] ?? 'secondary'}>{err.severity}</Badge>
+          <span className="text-sm font-medium">R{err.round_number}</span>
+          <span className="text-xs capitalize text-muted-foreground">{err.error_type}</span>
+        </div>
+        <span className="font-mono text-[10px] text-muted-foreground">
+          {Math.round(err.confidence * 100)}%
+        </span>
+      </div>
+      <p className="mt-1 line-clamp-1 text-xs text-muted-foreground">{err.description}</p>
+    </button>
   )
 }
 
-function ShapWaterfall({ importances }: { importances: { feature: string; value: number | string; impact: number }[] }) {
-  const maxImpact = Math.max(...importances.map((f) => Math.abs(f.impact)), 0.01)
-
+function ErrorDetail({ err }: { err: DetectedError }) {
+  const t = useTranslations('errors')
   return (
-    <div className="space-y-1.5">
-      <div className="text-xs font-medium text-text-muted mb-2">Feature Importance</div>
-      {importances.map((f) => {
-        const width = Math.min(Math.abs(f.impact) / maxImpact * 100, 100)
-        const isPositive = f.impact > 0
-        return (
-          <div key={f.feature} className="flex items-center gap-2 text-xs">
-            <span className="w-32 text-text-muted truncate text-right">{f.feature}</span>
-            <div className="flex-1 h-4 bg-bg-elevated rounded overflow-hidden relative">
-              <div
-                className={`h-full rounded ${isPositive ? 'bg-red-500/60' : 'bg-green-500/60'}`}
-                style={{ width: `${width}%` }}
-              />
+    <Card>
+      <CardHeader className="space-y-2">
+        <div className="flex items-center gap-2">
+          <Badge variant={SEVERITY_VARIANT[err.severity] ?? 'secondary'}>{err.severity}</Badge>
+          <span className="text-xs uppercase tracking-wider text-muted-foreground">
+            {err.error_type}
+          </span>
+        </div>
+        <CardTitle className="text-base">{err.description}</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="grid grid-cols-3 gap-2 text-xs">
+          <div className="rounded-md bg-secondary p-2">
+            <p className="text-muted-foreground">Round</p>
+            <p className="font-mono text-base font-semibold">{err.round_number}</p>
+          </div>
+          <div className="rounded-md bg-secondary p-2">
+            <p className="text-muted-foreground">{t('confidence')}</p>
+            <p className="font-mono text-base font-semibold">
+              {Math.round(err.confidence * 100)}%
+            </p>
+          </div>
+          <div className="rounded-md bg-secondary p-2">
+            <p className="text-muted-foreground">Model</p>
+            <p className="truncate font-mono text-[10px]">{err.model_name}</p>
+          </div>
+        </div>
+
+        {err.explanation && err.explanation.feature_importances.length > 0 && (
+          <div>
+            <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              {t('shapWaterfall')}
+            </p>
+            <ShapWaterfall importances={err.explanation.feature_importances} />
+          </div>
+        )}
+
+        {err.explanation?.explanation_text && (
+          <div className="rounded-md border border-border bg-secondary p-3">
+            <p className="text-xs uppercase tracking-wider text-muted-foreground">
+              {t('explanation')}
+            </p>
+            <p className="mt-1 text-sm">{err.explanation.explanation_text}</p>
+          </div>
+        )}
+
+        {err.recommendation && (
+          <div className="rounded-md border border-primary/30 bg-primary/5 p-3">
+            <div className="mb-1 flex items-center gap-2">
+              <Sparkles className="h-3.5 w-3.5 text-primary" />
+              <p className="text-sm font-medium text-primary">{err.recommendation.title}</p>
             </div>
-            <span className={`w-12 text-right ${isPositive ? 'text-red-400' : 'text-green-400'}`}>
-              {f.impact > 0 ? '+' : ''}{f.impact.toFixed(2)}
-            </span>
+            <p className="text-sm text-muted-foreground">{err.recommendation.description}</p>
+            {err.recommendation.expected_impact && (
+              <p className="mt-2 text-xs text-muted-foreground">
+                {err.recommendation.expected_impact}
+              </p>
+            )}
+            {err.recommendation.pro_reference && (
+              <p className="mt-1 text-xs italic text-muted-foreground">
+                ✦ {err.recommendation.pro_reference}
+              </p>
+            )}
           </div>
-        )
-      })}
-    </div>
-  )
-}
-
-function ErrorDetailPanel({ error, onClose }: { error: DetectedError; onClose: () => void }) {
-  return (
-    <div className="bg-bg-card border border-border rounded-xl p-5 space-y-4">
-      <div className="flex items-start justify-between">
-        <div>
-          <div className="flex items-center gap-2 mb-1">
-            <SeverityBadge severity={error.severity} />
-            <span className="text-xs text-text-dim capitalize">{error.error_type}</span>
-          </div>
-          <h3 className="font-medium">{error.description}</h3>
-        </div>
-        <button onClick={onClose} className="text-text-dim hover:text-text text-sm">X</button>
-      </div>
-
-      <div className="grid grid-cols-3 gap-3 text-xs">
-        <div className="bg-bg-elevated rounded-lg p-2">
-          <div className="text-text-dim">Round</div>
-          <div className="font-medium">{error.round_number}</div>
-        </div>
-        <div className="bg-bg-elevated rounded-lg p-2">
-          <div className="text-text-dim">Confidence</div>
-          <div className="font-medium">{(error.confidence * 100).toFixed(0)}%</div>
-        </div>
-        <div className="bg-bg-elevated rounded-lg p-2">
-          <div className="text-text-dim">Model</div>
-          <div className="font-medium text-[10px]">{error.model_name}</div>
-        </div>
-      </div>
-
-      {/* SHAP Waterfall */}
-      {error.explanation && error.explanation.feature_importances.length > 0 && (
-        <ShapWaterfall importances={error.explanation.feature_importances} />
-      )}
-
-      {/* Explanation text */}
-      {error.explanation && (
-        <div className="bg-bg-elevated rounded-lg p-3">
-          <div className="text-xs text-text-dim mb-1">AI Explanation</div>
-          <p className="text-sm text-text-muted">{error.explanation.explanation_text}</p>
-        </div>
-      )}
-
-      {/* Recommendation */}
-      {error.recommendation && (
-        <div className="bg-primary/5 border border-primary/20 rounded-lg p-3">
-          <div className="text-xs text-primary font-medium mb-1">{error.recommendation.title}</div>
-          <p className="text-sm text-text-muted">{error.recommendation.description}</p>
-          {error.recommendation.expected_impact && (
-            <p className="text-xs text-text-dim mt-2">Expected: {error.recommendation.expected_impact}</p>
-          )}
-        </div>
-      )}
-    </div>
+        )}
+      </CardContent>
+    </Card>
   )
 }
 
 export default function MatchErrorsPage() {
-  const params = useParams()
-  const router = useRouter()
-  const matchId = params.id as string
+  const { id } = useParams<{ id: string }>()
+  const t = useTranslations('errors')
 
-  const [data, setData] = useState<MatchErrorsResponse | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-  const [selectedError, setSelectedError] = useState<DetectedError | null>(null)
-  const [severityFilter, setSeverityFilter] = useState<string>('all')
-  const [typeFilter, setTypeFilter] = useState<string>('all')
-  const [playerFilter, setPlayerFilter] = useState<string>('all')
-
-  const loadErrors = useCallback(async () => {
-    try {
-      setLoading(true)
-      setError(null)
-      const result = await api.get<MatchErrorsResponse>(`/matches/${matchId}/errors`)
-      setData(result)
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Failed to load errors')
-    } finally {
-      setLoading(false)
-    }
-  }, [matchId])
-
-  useEffect(() => {
-    loadErrors()
-  }, [loadErrors])
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center py-20">
-        <Loader2 className="h-6 w-6 text-text-muted animate-spin" />
-      </div>
-    )
-  }
-
-  if (error) {
-    return (
-      <div className="text-center py-20">
-        <p className="text-error">{error}</p>
-      </div>
-    )
-  }
-
-  if (!data) return null
-
-  // Get unique players
-  const players = [...new Set(data.errors.map((e) => e.player_steam_id))]
-
-  // Filter errors
-  const filteredErrors = data.errors.filter((e) => {
-    if (severityFilter !== 'all' && e.severity !== severityFilter) return false
-    if (typeFilter !== 'all' && e.error_type !== typeFilter) return false
-    if (playerFilter !== 'all' && e.player_steam_id !== playerFilter) return false
-    return true
+  const { data, isLoading } = useQuery({
+    queryKey: QUERY_KEYS.matchErrors(id),
+    queryFn: () => matchesApi.errors(id),
   })
 
+  const [severity, setSeverity] = useUrlState('sev', 'all')
+  const [type, setType] = useUrlState('type', 'all')
+  const [player, setPlayer] = useUrlState('p', 'all')
+  const [selectedId, setSelectedId] = useState<string | null>(null)
+
+  const filtered = useMemo(() => {
+    if (!data) return []
+    return data.errors.filter((e) => {
+      if (severity !== 'all' && e.severity !== severity) return false
+      if (type !== 'all' && e.error_type !== type) return false
+      if (player !== 'all' && e.player_steam_id !== player) return false
+      return true
+    })
+  }, [data, severity, type, player])
+
+  const players = useMemo(
+    () => (data ? Array.from(new Set(data.errors.map((e) => e.player_steam_id))) : []),
+    [data]
+  )
+
+  const types = useMemo(
+    () => (data ? Array.from(new Set(data.errors.map((e) => e.error_type))) : []),
+    [data]
+  )
+
+  const selected = filtered.find((e) => e.id === selectedId) ?? filtered[0] ?? null
+
+  if (isLoading) {
+    return (
+      <div className="space-y-4">
+        <Skeleton className="h-24 w-full" />
+        <Skeleton className="h-96 w-full" />
+      </div>
+    )
+  }
+
+  if (!data || data.errors.length === 0) {
+    return (
+      <Card>
+        <CardContent className="flex flex-col items-center gap-3 py-16">
+          <AlertTriangle className="h-10 w-10 text-muted-foreground" />
+          <p className="text-lg font-medium">{t('noErrors')}</p>
+          <p className="text-sm text-muted-foreground">{t('noErrorsDesc')}</p>
+        </CardContent>
+      </Card>
+    )
+  }
+
   return (
-    <div>
-      <button
-        onClick={() => router.back()}
-        className="inline-flex items-center gap-1 text-text-muted hover:text-text text-sm mb-6 transition-colors"
-      >
-        <ArrowLeft className="h-4 w-4" />
-        Back to Match
-      </button>
-
-      <h1 className="text-2xl font-bold mb-2 flex items-center gap-2">
-        <AlertTriangle className="h-6 w-6 text-primary" />
-        Error Analysis
-      </h1>
-
-      {/* Summary Cards */}
-      <div className="grid grid-cols-3 gap-4 mb-6">
-        <div className="bg-bg-card border border-border rounded-xl p-4 text-center">
-          <div className="text-3xl font-bold">{data.total_errors}</div>
-          <div className="text-text-muted text-xs">Total Errors</div>
-        </div>
-        <div className="bg-red-500/5 border border-red-500/20 rounded-xl p-4 text-center">
-          <div className="text-3xl font-bold text-red-400">{data.critical_count}</div>
-          <div className="text-text-muted text-xs">Critical</div>
-        </div>
-        <div className="bg-amber-500/5 border border-amber-500/20 rounded-xl p-4 text-center">
-          <div className="text-3xl font-bold text-amber-400">{data.minor_count}</div>
-          <div className="text-text-muted text-xs">Minor</div>
-        </div>
+    <div className="space-y-4">
+      {/* Summary cards */}
+      <div className="grid gap-3 sm:grid-cols-4">
+        <Card>
+          <CardContent className="p-4 text-center">
+            <p className="font-mono text-2xl font-bold">{data.total_errors}</p>
+            <p className="text-xs text-muted-foreground">{t('total')}</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4 text-center">
+            <p className="font-mono text-2xl font-bold text-severity-critical">
+              {data.critical_count}
+            </p>
+            <p className="text-xs text-muted-foreground">{t('critical')}</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4 text-center">
+            <p className="font-mono text-2xl font-bold text-severity-major">
+              {data.errors.filter((e) => e.severity === 'major').length}
+            </p>
+            <p className="text-xs text-muted-foreground">{t('major')}</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4 text-center">
+            <p className="font-mono text-2xl font-bold text-severity-minor">
+              {data.minor_count}
+            </p>
+            <p className="text-xs text-muted-foreground">{t('minor')}</p>
+          </CardContent>
+        </Card>
       </div>
 
       {/* Filters */}
-      <div className="flex items-center gap-3 mb-4">
-        <Filter className="h-4 w-4 text-text-dim" />
-        <select
-          value={severityFilter}
-          onChange={(e) => setSeverityFilter(e.target.value)}
-          className="px-3 py-1.5 bg-bg-card border border-border rounded-lg text-sm"
-        >
-          <option value="all">All Severities</option>
-          <option value="critical">Critical</option>
-          <option value="minor">Minor</option>
-          <option value="info">Info</option>
-        </select>
-        <select
-          value={typeFilter}
-          onChange={(e) => setTypeFilter(e.target.value)}
-          className="px-3 py-1.5 bg-bg-card border border-border rounded-lg text-sm"
-        >
-          <option value="all">All Types</option>
-          <option value="positioning">Positioning</option>
-          <option value="utility">Utility</option>
-          <option value="timing">Timing</option>
-        </select>
-        <select
-          value={playerFilter}
-          onChange={(e) => setPlayerFilter(e.target.value)}
-          className="px-3 py-1.5 bg-bg-card border border-border rounded-lg text-sm"
-        >
-          <option value="all">All Players</option>
-          {players.map((p) => (
-            <option key={p} value={p}>{p}</option>
-          ))}
-        </select>
+      <div className="flex flex-wrap items-center gap-2">
+        <Filter className="h-4 w-4 text-muted-foreground" />
+        <Select value={severity} onValueChange={(v) => setSeverity(v)}>
+          <SelectTrigger className="w-[180px]">
+            <SelectValue placeholder={t('filterSeverity')} />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">{t('allSeverities')}</SelectItem>
+            <SelectItem value="critical">{t('critical')}</SelectItem>
+            <SelectItem value="major">{t('major')}</SelectItem>
+            <SelectItem value="minor">{t('minor')}</SelectItem>
+          </SelectContent>
+        </Select>
+        <Select value={type} onValueChange={(v) => setType(v)}>
+          <SelectTrigger className="w-[180px]">
+            <SelectValue placeholder={t('filterType')} />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">{t('allTypes')}</SelectItem>
+            {types.map((tp) => (
+              <SelectItem key={tp} value={tp} className="capitalize">
+                {tp}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Select value={player} onValueChange={(v) => setPlayer(v)}>
+          <SelectTrigger className="w-[180px]">
+            <SelectValue placeholder={t('filterPlayer')} />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">{t('allPlayers')}</SelectItem>
+            {players.map((p) => (
+              <SelectItem key={p} value={p}>
+                {p}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
 
-      {/* Error list + detail split view */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        {/* Error List */}
-        <div className="space-y-2">
-          {filteredErrors.length === 0 ? (
-            <div className="text-center py-10 text-text-dim">
-              <Shield className="h-8 w-8 mx-auto mb-2 opacity-50" />
-              No errors match filters
-            </div>
+      {/* Master/detail */}
+      <div className="grid gap-4 lg:grid-cols-[320px_1fr]">
+        <div className="space-y-2 lg:max-h-[640px] lg:overflow-y-auto lg:pr-2">
+          {filtered.length === 0 ? (
+            <p className="py-10 text-center text-sm text-muted-foreground">{t('noResults')}</p>
           ) : (
-            filteredErrors.map((err) => (
-              <button
+            filtered.map((err) => (
+              <ErrorCard
                 key={err.id}
-                onClick={() => setSelectedError(err)}
-                className={`w-full text-left bg-bg-card border rounded-lg p-3 transition-colors hover:border-primary/40 ${
-                  selectedError?.id === err.id ? 'border-primary/60 bg-primary/5' : 'border-border'
-                }`}
-              >
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <SeverityBadge severity={err.severity} />
-                    <span className="text-sm font-medium">R{err.round_number}</span>
-                    <span className="text-xs text-text-dim capitalize">{err.error_type}</span>
-                  </div>
-                  <ChevronRight className="h-4 w-4 text-text-dim" />
-                </div>
-                <p className="text-xs text-text-muted mt-1 line-clamp-1">{err.description}</p>
-              </button>
+                err={err}
+                active={selected?.id === err.id}
+                onClick={() => setSelectedId(err.id)}
+              />
             ))
           )}
         </div>
-
-        {/* Error Detail */}
         <div>
-          {selectedError ? (
-            <ErrorDetailPanel error={selectedError} onClose={() => setSelectedError(null)} />
+          {selected ? (
+            <ErrorDetail err={selected} />
           ) : (
-            <div className="bg-bg-card border border-border rounded-xl p-10 text-center text-text-dim">
-              <AlertTriangle className="h-8 w-8 mx-auto mb-2 opacity-50" />
-              <p className="text-sm">Select an error to view details</p>
-            </div>
+            <Card>
+              <CardContent className="py-10 text-center text-sm text-muted-foreground">
+                Select an error
+              </CardContent>
+            </Card>
           )}
         </div>
       </div>

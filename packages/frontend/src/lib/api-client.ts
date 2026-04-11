@@ -1,9 +1,42 @@
 import { useAuthStore } from '@/stores/auth-store'
 import type { TokenResponse } from '@/types/auth'
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1'
+export const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1'
+export const USE_MOCKS = process.env.NEXT_PUBLIC_USE_MOCKS === 'true'
 
 let refreshPromise: Promise<string | null> | null = null
+
+export class ApiError extends Error {
+  status: number
+  code?: string
+  detail?: unknown
+
+  constructor(status: number, message: string, opts?: { code?: string; detail?: unknown }) {
+    super(message)
+    this.name = 'ApiError'
+    this.status = status
+    if (opts?.code !== undefined) this.code = opts.code
+    if (opts?.detail !== undefined) this.detail = opts.detail
+  }
+
+  get isUnauthorized() {
+    return this.status === 401
+  }
+  get isForbidden() {
+    return this.status === 403
+  }
+  get isNotFound() {
+    return this.status === 404
+  }
+  get isServerError() {
+    return this.status >= 500
+  }
+}
+
+interface FetchOptions extends RequestInit {
+  retry?: number
+  timeout?: number
+}
 
 class ApiClient {
   private getTokens() {
@@ -16,9 +49,7 @@ class ApiClient {
   }
 
   private async refreshAccessToken(): Promise<string | null> {
-    // Deduplicate concurrent refresh requests
     if (refreshPromise) return refreshPromise
-
     refreshPromise = this._doRefresh()
     try {
       return await refreshPromise
@@ -44,7 +75,6 @@ class ApiClient {
       }
 
       const data: TokenResponse = await res.json()
-      // Update Zustand store directly (syncs localStorage too)
       useAuthStore.getState().setTokens(data.access_token, data.refresh_token)
       return data.access_token
     } catch {
@@ -52,107 +82,161 @@ class ApiClient {
     }
   }
 
-  async fetch<T>(path: string, options: RequestInit = {}): Promise<T> {
+  async fetch<T>(path: string, options: FetchOptions = {}): Promise<T> {
+    const { retry = 2, timeout = 30000, ...init } = options
     const tokens = this.getTokens()
+
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
-      ...(options.headers as Record<string, string>),
+      ...(init.headers as Record<string, string>),
     }
 
     if (tokens?.accessToken) {
       headers['Authorization'] = `Bearer ${tokens.accessToken}`
     }
 
-    let res = await fetch(`${API_BASE}${path}`, { ...options, headers })
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), timeout)
 
-    // Auto-refresh on 401
-    if (res.status === 401 && tokens?.refreshToken) {
-      const newToken = await this.refreshAccessToken()
-      if (newToken) {
-        headers['Authorization'] = `Bearer ${newToken}`
-        res = await fetch(`${API_BASE}${path}`, { ...options, headers })
+    try {
+      let res: Response
+      let attempt = 0
+
+      while (true) {
+        try {
+          res = await fetch(`${API_BASE}${path}`, {
+            ...init,
+            headers,
+            signal: controller.signal,
+          })
+        } catch (err) {
+          if (attempt < retry && !(err instanceof DOMException && err.name === 'AbortError')) {
+            attempt++
+            await new Promise((r) => setTimeout(r, 200 * 2 ** attempt))
+            continue
+          }
+          throw err
+        }
+
+        // Auto-refresh on 401
+        if (res.status === 401 && tokens?.refreshToken) {
+          const newToken = await this.refreshAccessToken()
+          if (newToken) {
+            headers['Authorization'] = `Bearer ${newToken}`
+            res = await fetch(`${API_BASE}${path}`, {
+              ...init,
+              headers,
+              signal: controller.signal,
+            })
+          }
+        }
+
+        // Retry on 5xx
+        if (res.status >= 500 && attempt < retry) {
+          attempt++
+          await new Promise((r) => setTimeout(r, 300 * 2 ** attempt))
+          continue
+        }
+
+        break
       }
-    }
 
-    if (!res.ok) {
-      const error = await res.json().catch(() => ({ detail: 'Request failed' }))
-      throw new ApiError(res.status, error.detail || 'Request failed')
-    }
+      if (!res.ok) {
+        const error = await res
+          .json()
+          .catch(() => ({ detail: res.statusText || 'Request failed' }))
+        throw new ApiError(res.status, error.detail || error.message || 'Request failed', {
+          code: error.code,
+          detail: error,
+        })
+      }
 
-    if (res.status === 204) return undefined as T
-    return res.json()
+      if (res.status === 204) return undefined as T
+      const contentType = res.headers.get('content-type') || ''
+      if (!contentType.includes('application/json')) return undefined as T
+      return res.json()
+    } finally {
+      clearTimeout(timeoutId)
+    }
   }
 
-  get<T>(path: string) {
-    return this.fetch<T>(path)
+  get<T>(path: string, options?: FetchOptions) {
+    return this.fetch<T>(path, options)
   }
 
-  post<T>(path: string, body?: unknown) {
+  post<T>(path: string, body?: unknown, options?: FetchOptions) {
     return this.fetch<T>(path, {
+      ...options,
       method: 'POST',
       body: body ? JSON.stringify(body) : undefined,
     })
   }
 
-  put<T>(path: string, body?: unknown) {
+  put<T>(path: string, body?: unknown, options?: FetchOptions) {
     return this.fetch<T>(path, {
+      ...options,
       method: 'PUT',
       body: body ? JSON.stringify(body) : undefined,
     })
   }
 
-  delete<T>(path: string) {
-    return this.fetch<T>(path, { method: 'DELETE' })
+  patch<T>(path: string, body?: unknown, options?: FetchOptions) {
+    return this.fetch<T>(path, {
+      ...options,
+      method: 'PATCH',
+      body: body ? JSON.stringify(body) : undefined,
+    })
   }
 
-  async upload<T>(path: string, file: File): Promise<T> {
+  delete<T>(path: string, options?: FetchOptions) {
+    return this.fetch<T>(path, { ...options, method: 'DELETE' })
+  }
+
+  async upload<T>(
+    path: string,
+    file: File,
+    onProgress?: (pct: number) => void
+  ): Promise<T> {
     const tokens = this.getTokens()
 
-    const buildFormData = () => {
+    return new Promise<T>((resolve, reject) => {
+      const xhr = new XMLHttpRequest()
       const fd = new FormData()
       fd.append('file', file)
-      return fd
-    }
 
-    const headers: Record<string, string> = {}
-    if (tokens?.accessToken) {
-      headers['Authorization'] = `Bearer ${tokens.accessToken}`
-    }
+      xhr.open('POST', `${API_BASE}${path}`)
+      if (tokens?.accessToken) {
+        xhr.setRequestHeader('Authorization', `Bearer ${tokens.accessToken}`)
+      }
 
-    let res = await fetch(`${API_BASE}${path}`, {
-      method: 'POST',
-      headers,
-      body: buildFormData(),
-    })
-
-    if (res.status === 401 && tokens?.refreshToken) {
-      const newToken = await this.refreshAccessToken()
-      if (newToken) {
-        headers['Authorization'] = `Bearer ${newToken}`
-        res = await fetch(`${API_BASE}${path}`, {
-          method: 'POST',
-          headers,
-          body: buildFormData(),
+      if (onProgress) {
+        xhr.upload.addEventListener('progress', (e) => {
+          if (e.lengthComputable) {
+            onProgress(Math.round((e.loaded / e.total) * 100))
+          }
         })
       }
-    }
 
-    if (!res.ok) {
-      const error = await res.json().catch(() => ({ detail: 'Upload failed' }))
-      throw new ApiError(res.status, error.detail || 'Upload failed')
-    }
-
-    return res.json()
-  }
-}
-
-export class ApiError extends Error {
-  constructor(
-    public status: number,
-    message: string
-  ) {
-    super(message)
-    this.name = 'ApiError'
+      xhr.addEventListener('load', () => {
+        if (xhr.status >= 200 && xhr.status < 300) {
+          try {
+            resolve(JSON.parse(xhr.responseText))
+          } catch {
+            resolve(undefined as T)
+          }
+        } else {
+          let detail: string = xhr.statusText
+          try {
+            const parsed = JSON.parse(xhr.responseText)
+            detail = parsed.detail || detail
+          } catch {}
+          reject(new ApiError(xhr.status, detail))
+        }
+      })
+      xhr.addEventListener('error', () => reject(new ApiError(0, 'Network error')))
+      xhr.addEventListener('abort', () => reject(new ApiError(0, 'Upload aborted')))
+      xhr.send(fd)
+    })
   }
 }
 

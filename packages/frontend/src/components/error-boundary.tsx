@@ -2,10 +2,12 @@
 
 import { Component, type ReactNode } from 'react'
 import { AlertTriangle } from 'lucide-react'
+import { Button } from '@/components/ui/button'
 
 interface ErrorBoundaryProps {
   children: ReactNode
   fallback?: ReactNode
+  onReset?: () => void
 }
 
 interface ErrorBoundaryState {
@@ -27,25 +29,23 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
     console.error('ErrorBoundary caught:', error, errorInfo)
   }
 
+  handleReset = () => {
+    this.setState({ hasError: false, error: null })
+    this.props.onReset?.()
+  }
+
   render() {
     if (this.state.hasError) {
-      if (this.props.fallback) {
-        return this.props.fallback
-      }
+      if (this.props.fallback) return this.props.fallback
 
       return (
-        <div className="flex flex-col items-center justify-center py-20 px-4">
-          <AlertTriangle className="h-10 w-10 text-amber-400 mb-4" />
-          <h2 className="text-lg font-bold mb-2">Something went wrong</h2>
-          <p className="text-text-muted text-sm mb-4 text-center max-w-md">
+        <div className="flex flex-col items-center justify-center px-4 py-20">
+          <AlertTriangle className="mb-4 h-10 w-10 text-warning" />
+          <h2 className="mb-2 text-lg font-bold">Something went wrong</h2>
+          <p className="mb-6 max-w-md text-center text-sm text-muted-foreground">
             {this.state.error?.message || 'An unexpected error occurred.'}
           </p>
-          <button
-            onClick={() => this.setState({ hasError: false, error: null })}
-            className="px-4 py-2 bg-primary text-white rounded-lg text-sm hover:bg-primary/80"
-          >
-            Try again
-          </button>
+          <Button onClick={this.handleReset}>Try again</Button>
         </div>
       )
     }

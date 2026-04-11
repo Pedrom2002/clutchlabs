@@ -1,30 +1,45 @@
 'use client'
 
 import { useRouter } from 'next/navigation'
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
+import { useHotkeys } from 'react-hotkeys-hook'
 import { ErrorBoundary } from '@/components/error-boundary'
-import { ToastProvider } from '@/components/common/toast-provider'
-import { ThemeProvider } from '@/lib/theme'
 import { Sidebar } from '@/components/layout/sidebar'
 import { Header } from '@/components/layout/header'
+import { CommandPalette } from '@/components/layout/command-palette'
+import { ProcessingQueue } from '@/components/layout/processing-queue'
 import { useAuthStore } from '@/stores/auth-store'
+import { useTheme } from '@/lib/theme'
+import { Skeleton } from '@/components/ui/skeleton'
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter()
+  const [mounted, setMounted] = useState(false)
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated)
-  const hasHydrated = useAuthStore((s) => s._hasHydrated)
+  const { toggle: toggleTheme } = useTheme()
 
   useEffect(() => {
-    if (hasHydrated && !isAuthenticated) {
+    setMounted(true)
+  }, [])
+
+  // Global navigation shortcuts
+  useHotkeys('g+d', () => router.push('/dashboard'))
+  useHotkeys('g+m', () => router.push('/dashboard/matches'))
+  useHotkeys('g+p', () => router.push('/dashboard/players'))
+  useHotkeys('g+s', () => router.push('/dashboard/scout'))
+  useHotkeys('u', () => router.push('/dashboard/demos?upload=1'))
+  useHotkeys('t', () => toggleTheme())
+
+  useEffect(() => {
+    if (mounted && !isAuthenticated) {
       router.push('/login')
     }
-  }, [hasHydrated, isAuthenticated, router])
+  }, [mounted, isAuthenticated, router])
 
-  // Wait for hydration before rendering anything
-  if (!hasHydrated) {
+  if (!mounted) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-text-muted text-sm">Loading...</div>
+      <div className="flex min-h-screen items-center justify-center p-6">
+        <Skeleton className="h-12 w-48" />
       </div>
     )
   }
@@ -32,18 +47,16 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   if (!isAuthenticated) return null
 
   return (
-    <ThemeProvider>
-      <ToastProvider>
-        <div className="flex min-h-screen">
-          <Sidebar />
-          <div className="flex-1 flex flex-col">
-            <Header />
-            <main className="flex-1 p-4 md:p-6">
-              <ErrorBoundary>{children}</ErrorBoundary>
-            </main>
-          </div>
-        </div>
-      </ToastProvider>
-    </ThemeProvider>
+    <div className="flex min-h-screen bg-background">
+      <Sidebar />
+      <div className="flex min-w-0 flex-1 flex-col">
+        <Header />
+        <main id="main-content" className="flex-1 p-4 md:p-6 lg:p-8">
+          <ErrorBoundary>{children}</ErrorBoundary>
+        </main>
+      </div>
+      <CommandPalette />
+      <ProcessingQueue />
+    </div>
   )
 }

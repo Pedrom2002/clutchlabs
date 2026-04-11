@@ -3,25 +3,31 @@
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useState } from 'react'
+import { useTranslations } from 'next-intl'
+import { toast } from 'sonner'
+import { Loader2 } from 'lucide-react'
 import { useAuthStore } from '@/stores/auth-store'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 
 export default function LoginPage() {
   const router = useRouter()
   const login = useAuthStore((s) => s.login)
+  const t = useTranslations('auth')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
-  const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    setError('')
     setLoading(true)
     try {
       await login({ email, password })
+      toast.success(t('loginSuccess'))
       router.push('/dashboard')
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Login failed')
+      toast.error(err instanceof Error ? err.message : t('loginError'))
     } finally {
       setLoading(false)
     }
@@ -29,52 +35,42 @@ export default function LoginPage() {
 
   return (
     <>
-      <h1 className="text-2xl font-bold mb-6 text-center">Welcome Back</h1>
+      <h1 className="mb-6 text-center text-2xl font-bold">{t('loginCta')}</h1>
       <form onSubmit={handleSubmit} className="space-y-4">
-        {error && (
-          <div className="bg-danger/10 border border-danger/20 text-danger text-sm px-4 py-3 rounded-lg">
-            {error}
-          </div>
-        )}
-        <div>
-          <label htmlFor="email" className="block text-sm font-medium text-text-muted mb-1.5">
-            Email
-          </label>
-          <input
+        <div className="space-y-1.5">
+          <Label htmlFor="email">{t('email')}</Label>
+          <Input
             id="email"
             type="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             required
-            className="w-full bg-bg border border-border rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:border-primary transition-colors"
+            placeholder={t('emailPlaceholder')}
+            autoComplete="email"
           />
         </div>
-        <div>
-          <label htmlFor="password" className="block text-sm font-medium text-text-muted mb-1.5">
-            Password
-          </label>
-          <input
+        <div className="space-y-1.5">
+          <Label htmlFor="password">{t('password')}</Label>
+          <Input
             id="password"
             type="password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             required
-            minLength={10}
-            className="w-full bg-bg border border-border rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:border-primary transition-colors"
+            minLength={8}
+            placeholder={t('passwordPlaceholder')}
+            autoComplete="current-password"
           />
         </div>
-        <button
-          type="submit"
-          disabled={loading}
-          className="w-full bg-primary hover:bg-primary-hover disabled:opacity-50 text-white py-2.5 rounded-lg text-sm font-medium transition-colors"
-        >
-          {loading ? 'Signing in...' : 'Sign In'}
-        </button>
+        <Button type="submit" className="w-full" disabled={loading}>
+          {loading && <Loader2 className="h-4 w-4 animate-spin" />}
+          {t('signIn')}
+        </Button>
       </form>
-      <p className="mt-6 text-center text-sm text-text-muted">
-        Don&apos;t have an account?{' '}
+      <p className="mt-6 text-center text-sm text-muted-foreground">
+        {t('noAccount')}{' '}
         <Link href="/register" className="text-primary hover:underline">
-          Create one
+          {t('createAccount')}
         </Link>
       </p>
     </>

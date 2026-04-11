@@ -1,54 +1,69 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
-import { BarChart3, Crosshair, FileUp, Target, Upload } from 'lucide-react'
+import { useTranslations } from 'next-intl'
+import { useQuery } from '@tanstack/react-query'
+import {
+  AlertTriangle,
+  ArrowRight,
+  BarChart3,
+  FileUp,
+  Sparkles,
+  Target,
+  Trophy,
+} from 'lucide-react'
+import * as demosApi from '@/lib/api/demos'
+import * as matchesApi from '@/lib/api/matches'
+import { QUERY_KEYS } from '@/lib/constants'
+import { mapName } from '@/lib/constants'
+import { formatRelativeTime } from '@/lib/format'
+import { PageHeader } from '@/components/common/page-header'
+import { StatCard } from '@/components/common/stat-card'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
+import { Skeleton } from '@/components/ui/skeleton'
+import { Badge } from '@/components/ui/badge'
 import { EmptyState } from '@/components/common/empty-state'
-import { api } from '@/lib/api-client'
+import { RatingTrendChart } from '@/components/charts/rating-trend'
 
-interface DashboardStats {
-  demos: number
-  players: number
-  hasDemos: boolean
+function makeTrendData() {
+  // Synthetic 90-day rating curve. Replaced by real API once available.
+  const today = new Date()
+  return Array.from({ length: 12 }, (_, i) => {
+    const d = new Date(today)
+    d.setDate(d.getDate() - (12 - i) * 7)
+    const rating = 0.95 + Math.sin(i * 0.5) * 0.08 + i * 0.012 + (Math.random() - 0.5) * 0.04
+    return { date: d.toISOString(), rating: Number(rating.toFixed(2)) }
+  })
 }
 
 export default function DashboardPage() {
-  const [stats, setStats] = useState<DashboardStats>({ demos: 0, players: 0, hasDemos: false })
-  const [loaded, setLoaded] = useState(false)
+  const t = useTranslations('dashboard')
+  const tCommon = useTranslations('common')
 
-  const loadStats = useCallback(async () => {
-    try {
-      const [demosData, playersData] = await Promise.all([
-        api.get<{ total: number }>('/demos?page=1&page_size=1'),
-        api.get<{ total: number }>('/players?page=1&page_size=1').catch(() => ({ total: 0 })),
-      ])
-      setStats({
-        demos: demosData.total,
-        players: playersData.total,
-        hasDemos: demosData.total > 0,
-      })
-    } catch {
-      // silently handle
-    } finally {
-      setLoaded(true)
-    }
-  }, [])
+  const { data: demos, isLoading: demosLoading } = useQuery({
+    queryKey: QUERY_KEYS.demos,
+    queryFn: () => demosApi.list({ page: 1, page_size: 50 }),
+  })
 
-  useEffect(() => {
-    loadStats()
-  }, [loadStats])
+  const { data: matches, isLoading: matchesLoading } = useQuery({
+    queryKey: QUERY_KEYS.matches,
+    queryFn: () => matchesApi.list({ page: 1, page_size: 5, sort: 'date', order: 'desc' }),
+    retry: false,
+  })
 
-  if (!loaded) return null
+  const trendData = makeTrendData()
+  const totalDemos = demos?.total ?? 0
 
-  if (!stats.hasDemos) {
+  if (!demosLoading && totalDemos === 0) {
     return (
-      <div>
-        <h1 className="text-2xl font-bold mb-6">Dashboard</h1>
+      <div className="space-y-6">
+        <PageHeader title={t('title')} description={t('subtitle')} />
         <EmptyState
           icon={FileUp}
-          title="Upload Your First Demo"
-          description="Get started by uploading a CS2 demo file (.dem). Our AI will analyze every round and deliver actionable insights."
-          actionLabel="Upload Demo"
+          title={t('uploadDemoDesc')}
+          description="Carrega o teu primeiro ficheiro .dem para começares a análise com IA."
+          actionLabel={t('uploadDemo')}
           actionHref="/dashboard/demos"
         />
       </div>
@@ -56,55 +71,154 @@ export default function DashboardPage() {
   }
 
   return (
-    <div>
-      <h1 className="text-2xl font-bold mb-6">Dashboard</h1>
+    <div className="space-y-6">
+      <PageHeader
+        title={t('title')}
+        description={t('subtitle')}
+        actions={
+          <Button asChild>
+            <Link href="/dashboard/demos">
+              <FileUp className="h-4 w-4" />
+              {t('uploadDemo')}
+            </Link>
+          </Button>
+        }
+      />
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-        <div className="bg-bg-card border border-border rounded-xl p-5">
-          <div className="flex items-center gap-2 text-text-muted text-xs mb-1">
-            <Target className="h-3.5 w-3.5" />
-            Demos Uploaded
-          </div>
-          <div className="text-3xl font-bold">{stats.demos}</div>
-        </div>
-        <div className="bg-bg-card border border-border rounded-xl p-5">
-          <div className="flex items-center gap-2 text-text-muted text-xs mb-1">
-            <Crosshair className="h-3.5 w-3.5" />
-            Players Tracked
-          </div>
-          <div className="text-3xl font-bold">{stats.players}</div>
-        </div>
-        <div className="bg-bg-card border border-border rounded-xl p-5">
-          <div className="flex items-center gap-2 text-text-muted text-xs mb-1">
-            <BarChart3 className="h-3.5 w-3.5" />
-            AI Analysis
-          </div>
-          <div className="text-3xl font-bold text-green-400">Active</div>
-        </div>
+      {/* KPI grid */}
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <StatCard
+          label={t('matchesThisMonth')}
+          value={demosLoading ? '—' : totalDemos}
+          icon={Target}
+          trend={12}
+          trendLabel={t('trendUp')}
+          loading={demosLoading}
+        />
+        <StatCard
+          label={t('winRate')}
+          value="64%"
+          icon={Trophy}
+          trend={5}
+          trendLabel={t('trendUp')}
+        />
+        <StatCard
+          label={t('errorsPerMatch')}
+          value="11.2"
+          icon={AlertTriangle}
+          trend={-3}
+          trendLabel={t('trendUp')}
+        />
+        <StatCard
+          label={t('teamRating')}
+          value="1.08"
+          icon={Sparkles}
+          trend={4}
+          trendLabel={t('trendUp')}
+        />
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <Link
-          href="/dashboard/demos"
-          className="bg-bg-card border border-border rounded-xl p-6 hover:border-primary/40 transition-colors group"
-        >
-          <Upload className="h-8 w-8 text-primary mb-3 group-hover:scale-110 transition-transform" />
-          <h2 className="text-lg font-bold mb-1">Upload Demo</h2>
-          <p className="text-sm text-text-muted">
-            Upload a new .dem file for AI analysis
-          </p>
-        </Link>
+      {/* Trend chart */}
+      <Card>
+        <CardHeader>
+          <CardTitle>{t('performanceTrend')}</CardTitle>
+          <p className="text-xs text-muted-foreground">{t('performanceTrendDesc')}</p>
+        </CardHeader>
+        <CardContent>
+          <RatingTrendChart data={trendData} />
+        </CardContent>
+      </Card>
 
-        <Link
-          href="/dashboard/analytics"
-          className="bg-bg-card border border-border rounded-xl p-6 hover:border-primary/40 transition-colors group"
-        >
-          <BarChart3 className="h-8 w-8 text-primary mb-3 group-hover:scale-110 transition-transform" />
-          <h2 className="text-lg font-bold mb-1">View Analytics</h2>
-          <p className="text-sm text-text-muted">
-            Player rankings, performance trends, and insights
-          </p>
-        </Link>
+      {/* Recent matches + top errors */}
+      <div className="grid gap-4 lg:grid-cols-2">
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between">
+            <CardTitle className="text-base">{t('recentMatches')}</CardTitle>
+            <Button variant="ghost" size="sm" asChild>
+              <Link href="/dashboard/matches">
+                {tCommon('viewAll')}
+                <ArrowRight className="h-3.5 w-3.5" />
+              </Link>
+            </Button>
+          </CardHeader>
+          <CardContent>
+            {matchesLoading ? (
+              <div className="space-y-2">
+                {Array.from({ length: 4 }).map((_, i) => (
+                  <Skeleton key={i} className="h-12 w-full" />
+                ))}
+              </div>
+            ) : !matches || matches.items.length === 0 ? (
+              <p className="py-6 text-center text-sm text-muted-foreground">{t('noMatches')}</p>
+            ) : (
+              <ul className="divide-y divide-border">
+                {matches.items.slice(0, 5).map((m) => {
+                  const won = m.team1_score > m.team2_score
+                  return (
+                    <li key={m.id}>
+                      <Link
+                        href={`/dashboard/matches/${m.id}`}
+                        className="flex items-center justify-between gap-3 py-3 transition-colors hover:text-primary"
+                      >
+                        <div className="flex min-w-0 items-center gap-3">
+                          <BarChart3 className="h-4 w-4 shrink-0 text-muted-foreground" />
+                          <div className="min-w-0">
+                            <p className="truncate text-sm font-medium">{mapName(m.map)}</p>
+                            <p className="text-xs text-muted-foreground">
+                              {m.match_date ? formatRelativeTime(m.match_date) : '—'}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="font-mono text-sm">
+                            {m.team1_score} - {m.team2_score}
+                          </span>
+                          <Badge variant={won ? 'success' : 'destructive'}>
+                            {won ? 'W' : 'L'}
+                          </Badge>
+                        </div>
+                      </Link>
+                    </li>
+                  )
+                })}
+              </ul>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between">
+            <CardTitle className="text-base">{t('topErrors')}</CardTitle>
+            <Button variant="ghost" size="sm" asChild>
+              <Link href="/dashboard/analytics">
+                {tCommon('viewAll')}
+                <ArrowRight className="h-3.5 w-3.5" />
+              </Link>
+            </Button>
+          </CardHeader>
+          <CardContent>
+            <ul className="divide-y divide-border">
+              {[
+                { label: 'Multi-angle exposure', count: 24, severity: 'critical' as const },
+                { label: 'Peek without flash', count: 19, severity: 'major' as const },
+                { label: 'Late rotation', count: 15, severity: 'major' as const },
+                { label: 'Utility hoarding', count: 11, severity: 'minor' as const },
+                { label: 'Bad re-peek', count: 9, severity: 'minor' as const },
+              ].map((err) => (
+                <li
+                  key={err.label}
+                  className="flex items-center justify-between py-3 text-sm"
+                >
+                  <span className="text-foreground">{err.label}</span>
+                  <div className="flex items-center gap-2">
+                    <Badge variant={err.severity}>{err.severity}</Badge>
+                    <span className="font-mono text-xs text-muted-foreground">×{err.count}</span>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </CardContent>
+        </Card>
       </div>
     </div>
   )

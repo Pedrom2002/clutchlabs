@@ -1,178 +1,212 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
+import { useQuery } from '@tanstack/react-query'
 import {
   ArrowLeft,
+  ArrowRight,
+  CheckCircle2,
   Clock,
   FileText,
   HardDrive,
   Loader2,
-  Map,
+  Map as MapIcon,
+  XCircle,
 } from 'lucide-react'
-import { api, ApiError } from '@/lib/api-client'
-import type { DemoDetail } from '@/types/demo'
+import { useTranslations } from 'next-intl'
+import * as demosApi from '@/lib/api/demos'
+import { QUERY_KEYS, mapName } from '@/lib/constants'
+import { formatBytes, formatDateTime } from '@/lib/format'
+import type { DemoStatus } from '@/types/demo'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Badge, type BadgeProps } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import { Progress } from '@/components/ui/progress'
+import { Skeleton } from '@/components/ui/skeleton'
+import { cn } from '@/lib/utils'
 
-function formatBytes(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+const PHASE_ORDER: DemoStatus[] = [
+  'uploaded',
+  'queued',
+  'parsing',
+  'extracting_features',
+  'running_models',
+  'completed',
+]
+
+const PHASE_PROGRESS: Record<DemoStatus, number> = {
+  uploaded: 5,
+  queued: 15,
+  downloading: 25,
+  parsing: 45,
+  extracting_features: 65,
+  running_models: 85,
+  completed: 100,
+  failed: 100,
+  error: 100,
 }
 
-function formatDate(date: string): string {
-  return new Date(date).toLocaleString()
-}
-
-const STATUS_COLORS: Record<string, string> = {
-  completed: 'text-green-400 bg-green-500/10 border-green-500/30',
-  failed: 'text-red-400 bg-red-500/10 border-red-500/30',
-  error: 'text-red-400 bg-red-500/10 border-red-500/30',
-  parsing: 'text-amber-400 bg-amber-500/10 border-amber-500/30',
-  queued: 'text-blue-400 bg-blue-500/10 border-blue-500/30',
-  uploaded: 'text-text-muted bg-bg-elevated border-border',
+const STATUS_VARIANT: Record<string, BadgeProps['variant']> = {
+  completed: 'success',
+  failed: 'destructive',
+  error: 'destructive',
 }
 
 export default function DemoDetailPage() {
-  const params = useParams()
+  const { id } = useParams<{ id: string }>()
   const router = useRouter()
-  const demoId = params.id as string
+  const t = useTranslations('demo')
 
-  const [demo, setDemo] = useState<DemoDetail | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
+  const { data: demo, isLoading, error } = useQuery({
+    queryKey: QUERY_KEYS.demo(id),
+    queryFn: () => demosApi.get(id),
+    refetchInterval: (q) => {
+      const status = q.state.data?.status
+      if (!status || ['completed', 'failed', 'error'].includes(status)) return false
+      return 3000
+    },
+  })
 
-  const loadDemo = useCallback(async () => {
-    try {
-      setLoading(true)
-      setError(null)
-      const data = await api.get<DemoDetail>(`/demos/${demoId}`)
-      setDemo(data)
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Failed to load demo')
-    } finally {
-      setLoading(false)
-    }
-  }, [demoId])
-
-  useEffect(() => {
-    loadDemo()
-  }, [loadDemo])
-
-  if (loading) {
+  if (isLoading) {
     return (
-      <div className="flex items-center justify-center py-20">
-        <Loader2 className="h-6 w-6 text-text-muted animate-spin" />
+      <div className="space-y-4">
+        <Skeleton className="h-8 w-32" />
+        <Skeleton className="h-40 w-full" />
+        <Skeleton className="h-64 w-full" />
       </div>
     )
   }
 
   if (error || !demo) {
     return (
-      <div className="text-center py-20">
-        <p className="text-error mb-4">{error || 'Demo not found'}</p>
-        <button onClick={() => router.back()} className="text-primary text-sm hover:underline">
-          Go back
-        </button>
+      <div className="space-y-4 text-center">
+        <p className="text-destructive">Demo not found</p>
+        <Button variant="outline" onClick={() => router.back()}>
+          <ArrowLeft className="h-4 w-4" />
+          Back
+        </Button>
       </div>
     )
   }
 
-  const statusColor = STATUS_COLORS[demo.status] || STATUS_COLORS.uploaded
+  const progress = PHASE_PROGRESS[demo.status] ?? 0
+  const isProcessing = !['completed', 'failed', 'error'].includes(demo.status)
+  const variant = STATUS_VARIANT[demo.status] ?? 'secondary'
 
   return (
-    <div>
-      <button
-        onClick={() => router.back()}
-        className="inline-flex items-center gap-1 text-text-muted hover:text-text text-sm mb-6 transition-colors"
-      >
+    <div className="space-y-6">
+      <Button variant="ghost" size="sm" onClick={() => router.back()} className="-ml-2">
         <ArrowLeft className="h-4 w-4" />
         Back
-      </button>
+      </Button>
 
-      <div className="bg-bg-card border border-border rounded-xl p-6 mb-6">
-        <div className="flex items-start justify-between">
+      <Card>
+        <CardHeader>
+          <div className="flex items-start justify-between gap-4">
+            <div className="min-w-0 space-y-2">
+              <CardTitle className="flex items-center gap-2 truncate">
+                <FileText className="h-5 w-5 shrink-0 text-primary" />
+                <span className="truncate">{demo.original_filename}</span>
+              </CardTitle>
+              <div className="flex flex-wrap gap-4 text-xs text-muted-foreground">
+                <span className="inline-flex items-center gap-1">
+                  <HardDrive className="h-3 w-3" />
+                  {formatBytes(demo.file_size_bytes)}
+                </span>
+                <span className="inline-flex items-center gap-1">
+                  <Clock className="h-3 w-3" />
+                  {formatDateTime(demo.created_at)}
+                </span>
+              </div>
+            </div>
+            <Badge variant={variant} className="capitalize">
+              {t(demo.status)}
+            </Badge>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {demo.error_message && (
+            <div className="rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
+              {demo.error_message}
+            </div>
+          )}
+
+          {/* Phase tracker */}
           <div>
-            <h1 className="text-xl font-bold flex items-center gap-2">
-              <FileText className="h-5 w-5 text-primary" />
-              {demo.original_filename}
-            </h1>
-            <div className="mt-2 flex flex-wrap gap-4 text-sm text-text-muted">
-              <span className="flex items-center gap-1">
-                <HardDrive className="h-3.5 w-3.5" />
-                {formatBytes(demo.file_size_bytes)}
-              </span>
-              <span className="flex items-center gap-1">
-                <Clock className="h-3.5 w-3.5" />
-                Uploaded {formatDate(demo.created_at)}
-              </span>
-            </div>
-          </div>
-          <span className={`px-3 py-1 rounded-full text-xs font-medium border ${statusColor}`}>
-            {demo.status}
-          </span>
-        </div>
+            <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              {t('processingPhases')}
+            </p>
+            <Progress value={progress} className="mb-3" />
+            <ol className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+              {PHASE_ORDER.map((phase, idx) => {
+                const currentIdx = PHASE_ORDER.indexOf(demo.status as DemoStatus)
+                const isDone = currentIdx >= 0 && idx < currentIdx
+                const isActive = currentIdx === idx && isProcessing
+                const isFailed = ['failed', 'error'].includes(demo.status)
 
-        {demo.error_message && (
-          <div className="mt-4 p-3 bg-red-500/10 border border-red-500/20 rounded-lg text-sm text-red-400">
-            {demo.error_message}
+                return (
+                  <li
+                    key={phase}
+                    className={cn(
+                      'flex items-center gap-2 rounded-md border border-border p-2 text-xs',
+                      isActive && 'border-primary/50 bg-primary/5',
+                      isDone && 'opacity-70'
+                    )}
+                  >
+                    {isFailed && idx === currentIdx ? (
+                      <XCircle className="h-3.5 w-3.5 shrink-0 text-destructive" />
+                    ) : isDone || demo.status === 'completed' ? (
+                      <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-success" />
+                    ) : isActive ? (
+                      <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-primary" />
+                    ) : (
+                      <span className="h-3.5 w-3.5 shrink-0 rounded-full border border-border" />
+                    )}
+                    <span className="truncate capitalize">{t(phase)}</span>
+                  </li>
+                )
+              })}
+            </ol>
           </div>
-        )}
-
-        {demo.parsing_started_at && (
-          <div className="mt-4 grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-            <div>
-              <span className="text-text-dim">Parsing started</span>
-              <p className="text-text-muted">{formatDate(demo.parsing_started_at)}</p>
-            </div>
-            {demo.parsing_completed_at && (
-              <div>
-                <span className="text-text-dim">Parsing completed</span>
-                <p className="text-text-muted">{formatDate(demo.parsing_completed_at)}</p>
-              </div>
-            )}
-            {demo.processing_completed_at && (
-              <div>
-                <span className="text-text-dim">Processing completed</span>
-                <p className="text-text-muted">{formatDate(demo.processing_completed_at)}</p>
-              </div>
-            )}
-          </div>
-        )}
-      </div>
+        </CardContent>
+      </Card>
 
       {demo.match && (
-        <div className="bg-bg-card border border-border rounded-xl p-6">
-          <h2 className="text-lg font-bold mb-4 flex items-center gap-2">
-            <Map className="h-4 w-4 text-primary" />
-            Match Result
-          </h2>
-          <div className="flex items-center gap-6 mb-4">
-            <div className="text-center">
-              <div className="text-text-muted text-xs mb-1">
-                {demo.match.team1_name || 'Team 1'}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-base">
+              <MapIcon className="h-4 w-4 text-primary" />
+              {mapName(demo.match.map)}
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex items-center justify-between gap-6">
+              <div className="text-center">
+                <p className="text-xs text-muted-foreground">{demo.match.team1_name || 'Team 1'}</p>
+                <p className="font-mono text-3xl font-bold">{demo.match.team1_score}</p>
               </div>
-              <div className="text-3xl font-bold">{demo.match.team1_score}</div>
-            </div>
-            <div className="text-text-dim text-lg font-medium">vs</div>
-            <div className="text-center">
-              <div className="text-text-muted text-xs mb-1">
-                {demo.match.team2_name || 'Team 2'}
+              <span className="font-mono text-lg text-muted-foreground">vs</span>
+              <div className="text-center">
+                <p className="text-xs text-muted-foreground">{demo.match.team2_name || 'Team 2'}</p>
+                <p className="font-mono text-3xl font-bold">{demo.match.team2_score}</p>
               </div>
-              <div className="text-3xl font-bold">{demo.match.team2_score}</div>
             </div>
-          </div>
-          <div className="flex gap-4 text-sm text-text-muted mb-4">
-            <span>{demo.match.map}</span>
-            <span>{demo.match.total_rounds} rounds</span>
-          </div>
-          <Link
-            href={`/dashboard/matches/${demo.match.id}`}
-            className="inline-flex items-center gap-1 px-4 py-2 bg-primary text-white rounded-lg text-sm hover:bg-primary/80"
-          >
-            View Full Match Details
-          </Link>
-        </div>
+            <div className="flex flex-wrap gap-4 text-xs text-muted-foreground">
+              <span>{demo.match.total_rounds} rounds</span>
+              {demo.match.duration_seconds && (
+                <span>{Math.round(demo.match.duration_seconds / 60)}m</span>
+              )}
+              {demo.match.match_date && <span>{formatDateTime(demo.match.match_date)}</span>}
+            </div>
+            <Button asChild>
+              <Link href={`/dashboard/matches/${demo.match.id}`}>
+                {t('openMatch')}
+                <ArrowRight className="h-4 w-4" />
+              </Link>
+            </Button>
+          </CardContent>
+        </Card>
       )}
     </div>
   )

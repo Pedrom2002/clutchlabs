@@ -2,6 +2,9 @@
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { useState } from 'react'
+import { TooltipProvider } from '@/components/ui/tooltip'
+import { ThemeProvider } from '@/lib/theme'
+import { Toaster } from '@/components/ui/sonner'
 
 export function Providers({ children }: { children: React.ReactNode }) {
   const [queryClient] = useState(
@@ -11,10 +14,20 @@ export function Providers({ children }: { children: React.ReactNode }) {
           queries: {
             staleTime: 60 * 1000,
             retry: 1,
+            refetchOnWindowFocus: false,
           },
         },
       })
   )
 
-  return <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+  return (
+    <QueryClientProvider client={queryClient}>
+      <ThemeProvider>
+        <TooltipProvider delayDuration={200}>
+          {children}
+          <Toaster />
+        </TooltipProvider>
+      </ThemeProvider>
+    </QueryClientProvider>
+  )
 }

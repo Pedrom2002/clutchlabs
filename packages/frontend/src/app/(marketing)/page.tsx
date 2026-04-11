@@ -1,10 +1,12 @@
 import Link from 'next/link'
+import { getTranslations } from 'next-intl/server'
 import {
   BarChart3,
   Brain,
+  CheckCircle2,
   ChevronRight,
   Map,
-  Shield,
+  Sparkles,
   Target,
   TrendingUp,
   Upload,
@@ -13,196 +15,241 @@ import {
 } from 'lucide-react'
 import { EmailCaptureForm } from '@/components/marketing/email-capture-form'
 import { tiers } from '@/lib/pricing-data'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Badge } from '@/components/ui/badge'
 
-const features = [
+const FAQS = [
   {
-    icon: Brain,
-    title: 'AI-Powered Analysis',
-    description:
-      'Our ML models (Mamba, GraphSAGE, CatBoost) analyze every round to find tactical patterns, positioning errors, and optimal utility usage.',
+    q: 'Que ficheiros são suportados?',
+    qEn: 'Which files are supported?',
+    a: 'Suportamos ficheiros .dem (CS2). Para CS:GO legacy, está em desenvolvimento.',
+    aEn: 'We support .dem files (CS2). CS:GO legacy support is in development.',
   },
   {
-    icon: Map,
-    title: '2D/3D Heatmaps',
-    description:
-      'Visualize player positioning, spray patterns, utility lineups, and kill zones with interactive heatmaps across all maps.',
+    q: 'Quanto tempo demora a análise?',
+    qEn: 'How long does analysis take?',
+    a: 'Tipicamente 2-5 minutos por demo de 30 minutos, dependendo da carga.',
+    aEn: 'Typically 2-5 minutes per 30-minute demo, depending on load.',
   },
   {
-    icon: TrendingUp,
-    title: 'Player Ratings & Trends',
-    description:
-      'ELO-style ratings combining aim mechanics, game sense, utility impact, and teamwork. Track improvement over time.',
+    q: 'Os meus dados ficam privados?',
+    qEn: 'Are my files kept private?',
+    a: 'Sim. As demos são acessíveis apenas pela tua organização e nunca são partilhadas.',
+    aEn: 'Yes. Demos are only accessible to your organization and never shared.',
   },
   {
-    icon: Target,
-    title: 'Economy Optimization',
-    description:
-      'AI predicts optimal buy/save decisions, eco-round win probability, and identifies economy mismanagement patterns.',
-  },
-  {
-    icon: Shield,
-    title: 'Tactical Playbook',
-    description:
-      'Automatically detect and catalog team strategies with similarity clustering. Find counter-strats from pro matches.',
-  },
-  {
-    icon: BarChart3,
-    title: 'Live Match Prediction',
-    description:
-      'Real-time round win prediction using transformer models. Understand momentum shifts and key turning points.',
+    q: 'Posso cancelar a qualquer momento?',
+    qEn: 'Can I cancel anytime?',
+    a: 'Sim, a subscrição é mensal sem fidelização. Cancela com um clique.',
+    aEn: 'Yes, monthly subscription with no commitment. Cancel with one click.',
   },
 ]
 
-export default function LandingPage() {
+export default async function LandingPage() {
+  const t = await getTranslations('marketing')
+  const tCommon = await getTranslations('common')
+
+  const features = [
+    {
+      icon: Brain,
+      title: t('feature1Title'),
+      description: t('feature1Desc'),
+    },
+    {
+      icon: Map,
+      title: t('feature2Title'),
+      description: t('feature2Desc'),
+    },
+    {
+      icon: TrendingUp,
+      title: t('feature3Title'),
+      description: t('feature3Desc'),
+    },
+    {
+      icon: Target,
+      title: t('feature4Title'),
+      description: t('feature4Desc'),
+    },
+    {
+      icon: BarChart3,
+      title: 'Live match prediction',
+      description: 'Real-time round win probability with explainable factors.',
+    },
+    {
+      icon: Sparkles,
+      title: 'SHAP explanations',
+      description: 'Every detected error comes with a feature-importance waterfall.',
+    },
+  ]
+
   return (
     <>
       {/* Hero */}
       <section className="relative overflow-hidden">
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,rgba(255,107,0,0.08),transparent_60%)]" />
-        <div className="max-w-7xl mx-auto px-6 pt-24 pb-20 text-center relative">
-          <div className="inline-flex items-center gap-2 bg-primary-dim text-primary text-sm px-4 py-1.5 rounded-full mb-8 font-medium">
-            <Zap className="h-4 w-4" />
-            Early Access — Join the Beta
-          </div>
-          <h1 className="text-5xl md:text-7xl font-bold leading-tight tracking-tight max-w-4xl mx-auto">
-            AI-Powered <span className="text-primary">CS2</span> Analytics
+        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,hsl(24_100%_50%/0.08),transparent_60%)]" />
+        <div className="relative mx-auto max-w-7xl px-6 pb-20 pt-24 text-center">
+          <Badge variant="default" className="mb-8 inline-flex items-center gap-2 px-3 py-1">
+            <Zap className="h-3.5 w-3.5" />
+            {t('tagline')}
+          </Badge>
+          <h1 className="mx-auto max-w-4xl text-5xl font-bold leading-tight tracking-tight md:text-7xl">
+            {t('heroTitle')}
           </h1>
-          <p className="mt-6 text-lg md:text-xl text-text-muted max-w-2xl mx-auto leading-relaxed">
-            Upload your demos and let our ML models find what humans miss. Positioning errors,
-            tactical patterns, economy leaks, and player improvement paths — all automated.
+          <p className="mx-auto mt-6 max-w-2xl text-lg leading-relaxed text-muted-foreground md:text-xl">
+            {t('heroSubtitle')}
           </p>
           <div className="mt-10 flex flex-col items-center gap-4">
+            <div className="flex flex-wrap items-center justify-center gap-3">
+              <Button asChild size="xl">
+                <Link href="/register">{t('ctaStart')}</Link>
+              </Button>
+              <Button asChild size="xl" variant="outline">
+                <Link href="/pricing">{tCommon('view')} pricing</Link>
+              </Button>
+            </div>
             <EmailCaptureForm />
-            <p className="text-text-dim text-sm">Free during beta. No credit card required.</p>
+            <p className="text-xs text-muted-foreground">
+              Free during beta. No credit card required.
+            </p>
           </div>
         </div>
       </section>
 
       {/* How it works */}
-      <section className="py-20 border-t border-border">
-        <div className="max-w-7xl mx-auto px-6">
-          <h2 className="text-3xl font-bold text-center mb-16">
-            From Demo to Insights in <span className="text-primary">3 Steps</span>
+      <section className="border-t border-border py-20">
+        <div className="mx-auto max-w-7xl px-6">
+          <h2 className="mb-16 text-center text-3xl font-bold">
+            {t('howItWorks')}
           </h2>
-          <div className="grid md:grid-cols-3 gap-8">
+          <div className="grid gap-6 md:grid-cols-3">
             {[
-              {
-                step: '01',
-                icon: Upload,
-                title: 'Upload Demo',
-                desc: 'Drop your .dem file or connect your FACEIT account for automatic imports.',
-              },
-              {
-                step: '02',
-                icon: Brain,
-                title: 'AI Analysis',
-                desc: '7 specialized ML models process every tick, round, and economy decision.',
-              },
-              {
-                step: '03',
-                icon: BarChart3,
-                title: 'Get Insights',
-                desc: 'Interactive dashboards with heatmaps, ratings, tactical breakdowns, and improvement tips.',
-              },
+              { step: '01', icon: Upload, titleKey: 'step1', descKey: 'step1Desc' },
+              { step: '02', icon: Brain, titleKey: 'step2', descKey: 'step2Desc' },
+              { step: '03', icon: BarChart3, titleKey: 'step3', descKey: 'step3Desc' },
             ].map((item) => (
-              <div
-                key={item.step}
-                className="bg-bg-card border border-border rounded-xl p-8 hover:border-border-hover transition-colors"
-              >
-                <div className="text-primary font-mono text-sm mb-4">{item.step}</div>
-                <item.icon className="h-8 w-8 text-primary mb-4" />
-                <h3 className="text-lg font-semibold mb-2">{item.title}</h3>
-                <p className="text-text-muted text-sm leading-relaxed">{item.desc}</p>
-              </div>
+              <Card key={item.step} className="hover:border-primary/40">
+                <CardContent className="p-8">
+                  <div className="mb-4 font-mono text-sm text-primary">{item.step}</div>
+                  <item.icon className="mb-4 h-8 w-8 text-primary" />
+                  <h3 className="mb-2 text-lg font-semibold">
+                    {t(item.titleKey as 'step1' | 'step2' | 'step3')}
+                  </h3>
+                  <p className="text-sm leading-relaxed text-muted-foreground">
+                    {t(item.descKey as 'step1Desc' | 'step2Desc' | 'step3Desc')}
+                  </p>
+                </CardContent>
+              </Card>
             ))}
           </div>
         </div>
       </section>
 
       {/* Features */}
-      <section className="py-20 border-t border-border">
-        <div className="max-w-7xl mx-auto px-6">
-          <h2 className="text-3xl font-bold text-center mb-4">
-            Everything You Need to <span className="text-primary">Level Up</span>
-          </h2>
-          <p className="text-text-muted text-center mb-16 max-w-xl mx-auto">
-            Built by CS2 players for CS2 players. Our AI models are trained on thousands of pro
-            matches.
+      <section className="border-t border-border py-20">
+        <div className="mx-auto max-w-7xl px-6">
+          <h2 className="mb-4 text-center text-3xl font-bold">{t('featuresTitle')}</h2>
+          <p className="mx-auto mb-16 max-w-xl text-center text-muted-foreground">
+            Built for serious teams. Every insight backed by ML models trained on thousands of pro matches.
           </p>
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
             {features.map((feature) => (
-              <div
-                key={feature.title}
-                className="bg-bg-card border border-border rounded-xl p-6 hover:border-border-hover transition-colors group"
-              >
-                <feature.icon className="h-8 w-8 text-primary mb-4 group-hover:scale-110 transition-transform" />
-                <h3 className="text-lg font-semibold mb-2">{feature.title}</h3>
-                <p className="text-text-muted text-sm leading-relaxed">{feature.description}</p>
-              </div>
+              <Card key={feature.title} className="group hover:border-primary/40">
+                <CardContent className="p-6">
+                  <feature.icon className="mb-4 h-8 w-8 text-primary transition-transform group-hover:scale-110" />
+                  <h3 className="mb-2 text-lg font-semibold">{feature.title}</h3>
+                  <p className="text-sm leading-relaxed text-muted-foreground">{feature.description}</p>
+                </CardContent>
+              </Card>
             ))}
           </div>
         </div>
       </section>
 
       {/* Pricing */}
-      <section className="py-20 border-t border-border">
-        <div className="max-w-7xl mx-auto px-6">
-          <h2 className="text-3xl font-bold text-center mb-4">
-            Simple <span className="text-primary">Pricing</span>
-          </h2>
-          <p className="text-text-muted text-center mb-16">
+      <section className="border-t border-border py-20">
+        <div className="mx-auto max-w-7xl px-6">
+          <h2 className="mb-4 text-center text-3xl font-bold">{t('pricingTitle')}</h2>
+          <p className="mb-16 text-center text-muted-foreground">
             Start free, upgrade when you need more.
           </p>
-          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
+          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
             {tiers.map((tier) => (
-              <div
+              <Card
                 key={tier.name}
-                className={`bg-bg-card border rounded-xl p-6 flex flex-col ${
-                  tier.popular ? 'border-primary' : 'border-border'
-                }`}
+                className={tier.popular ? 'border-primary' : ''}
               >
-                {tier.popular && (
-                  <div className="text-xs text-primary font-medium mb-2">Most Popular</div>
-                )}
-                <h3 className="text-lg font-bold">{tier.name}</h3>
-                <div className="mt-2 mb-4">
-                  <span className="text-3xl font-bold">&euro;{tier.price}</span>
-                  <span className="text-text-dim text-sm">/month</span>
-                </div>
-                <div className="text-sm text-text-muted mb-4">{tier.demos}</div>
-                <ul className="flex-1 space-y-2 mb-6">
-                  {tier.features.map((f) => (
-                    <li key={f} className="text-sm text-text-muted flex items-start gap-2">
-                      <ChevronRight className="h-4 w-4 text-primary shrink-0 mt-0.5" />
-                      {f}
-                    </li>
-                  ))}
-                </ul>
-                <Link
-                  href="/register"
-                  className={`text-center text-sm font-medium py-2.5 rounded-lg transition-colors ${
-                    tier.popular
-                      ? 'bg-primary hover:bg-primary-hover text-white'
-                      : 'bg-bg-elevated hover:bg-border text-text'
-                  }`}
-                >
-                  Get Started
-                </Link>
-              </div>
+                <CardHeader>
+                  {tier.popular && (
+                    <Badge variant="default" className="w-fit">
+                      Most popular
+                    </Badge>
+                  )}
+                  <CardTitle className="text-lg">{tier.name}</CardTitle>
+                  <div>
+                    <span className="font-mono text-3xl font-bold">€{tier.price}</span>
+                    <span className="text-sm text-muted-foreground">/mês</span>
+                  </div>
+                  <p className="text-sm text-muted-foreground">{tier.demos}</p>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <ul className="space-y-2">
+                    {tier.features.map((f) => (
+                      <li
+                        key={f}
+                        className="flex items-start gap-2 text-sm text-muted-foreground"
+                      >
+                        <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-success" />
+                        {f}
+                      </li>
+                    ))}
+                  </ul>
+                  <Button
+                    asChild
+                    className="w-full"
+                    variant={tier.popular ? 'default' : 'outline'}
+                  >
+                    <Link href="/register">Get started</Link>
+                  </Button>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* FAQ */}
+      <section className="border-t border-border py-20">
+        <div className="mx-auto max-w-3xl px-6">
+          <h2 className="mb-12 text-center text-3xl font-bold">{t('faqTitle')}</h2>
+          <div className="space-y-4">
+            {FAQS.map((faq, i) => (
+              <Card key={i}>
+                <CardContent className="p-5">
+                  <h3 className="mb-2 flex items-start gap-2 text-base font-semibold">
+                    <ChevronRight className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+                    <span>{faq.q}</span>
+                  </h3>
+                  <p className="ml-6 text-sm text-muted-foreground">{faq.a}</p>
+                </CardContent>
+              </Card>
             ))}
           </div>
         </div>
       </section>
 
       {/* CTA */}
-      <section className="py-20 border-t border-border">
-        <div className="max-w-3xl mx-auto px-6 text-center">
-          <Users className="h-12 w-12 text-primary mx-auto mb-6" />
-          <h2 className="text-3xl font-bold mb-4">Ready to Transform Your Game?</h2>
-          <p className="text-text-muted mb-8">
-            Join the beta and be the first to experience AI-powered CS2 analytics.
+      <section className="border-t border-border py-20">
+        <div className="mx-auto max-w-3xl px-6 text-center">
+          <Users className="mx-auto mb-6 h-12 w-12 text-primary" />
+          <h2 className="mb-4 text-3xl font-bold">Ready to transform your game?</h2>
+          <p className="mb-8 text-muted-foreground">
+            Join the beta and experience explainable AI for CS2 analysis.
           </p>
-          <div className="flex justify-center">
+          <div className="flex flex-col items-center gap-3">
+            <Button asChild size="xl">
+              <Link href="/register">{t('ctaStart')}</Link>
+            </Button>
             <EmailCaptureForm />
           </div>
         </div>
