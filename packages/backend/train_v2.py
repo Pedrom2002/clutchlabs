@@ -88,7 +88,7 @@ def build_win_prob_v2_dataset(demos_dir: Path) -> tuple[np.ndarray, np.ndarray]:
     - avg_hp_t, avg_hp_ct
     - map_id one-hot (7 maps)
     """
-    from src.services.demo_parser import parse_demo
+    from demo_cache import parse_demo_cached as parse_demo
 
     dem_files = sorted(demos_dir.glob("*.dem"))
     logger.info("Building win prob v2 dataset from %d demos", len(dem_files))
@@ -240,7 +240,7 @@ def build_regression_dataset(demos_dir: Path, output_dir: Path, win_prob_model) 
     Each window's label is the win probability delta caused by that death.
     No heuristics, no classification — pure regression on game impact.
     """
-    from src.services.demo_parser import parse_demo
+    from demo_cache import parse_demo_cached as parse_demo
 
     pos_dir = output_dir / "positioning"
     pos_dir.mkdir(parents=True, exist_ok=True)

@@ -46,7 +46,7 @@ def build_win_prob_dataset(demos_dir: Path) -> tuple[np.ndarray, np.ndarray]:
     Features: [alive_t, alive_ct, kill_is_t_victim, round_number_norm, score_diff_norm]
     Label: 1 if T wins the round, 0 if CT wins
     """
-    from src.services.demo_parser import parse_demo
+    from demo_cache import parse_demo_cached as parse_demo
 
     dem_files = sorted(demos_dir.glob("*.dem"))
     logger.info("Building win prob dataset from %d demos", len(dem_files))
@@ -181,7 +181,7 @@ def relabel_with_win_prob(
     5. Medium delta (>0.05) + not traded → minor
     6. Low delta → no_error
     """
-    from src.services.demo_parser import parse_demo
+    from demo_cache import parse_demo_cached as parse_demo
 
     pos_dir = output_dir / "positioning"
     pos_dir.mkdir(parents=True, exist_ok=True)

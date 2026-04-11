@@ -62,7 +62,7 @@ def _build_alive_state_at_tick(parsed, round_num, tick):
 
 def build_dataset_with_metadata(demos_dir: Path):
     """Build dataset and return (X, y, demo_idx, situations) for stratified analysis."""
-    from src.services.demo_parser import parse_demo
+    from demo_cache import parse_demo_cached as parse_demo
 
     dem_files = sorted(demos_dir.glob("*.dem"))
     logger.info("Loading %d demos for validation...", len(dem_files))

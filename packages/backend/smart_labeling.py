@@ -68,7 +68,7 @@ def _weapon_tier(weapon: str) -> int:
 
 def build_and_train_win_prob(demos_dir: Path):
     """Build win prob dataset and train model (same as win_probability.py)."""
-    from src.services.demo_parser import parse_demo
+    from demo_cache import parse_demo_cached as parse_demo
 
     try:
         import lightgbm as lgb
@@ -169,7 +169,7 @@ def build_and_train_win_prob(demos_dir: Path):
 
 def smart_label_demos(demos_dir: Path, output_dir: Path, win_prob_model) -> dict:
     """Label deaths using 10 contextual variables."""
-    from src.services.demo_parser import parse_demo
+    from demo_cache import parse_demo_cached as parse_demo
 
     pos_dir = output_dir / "positioning"
     pos_dir.mkdir(parents=True, exist_ok=True)

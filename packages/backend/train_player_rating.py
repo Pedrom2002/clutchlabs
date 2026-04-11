@@ -39,7 +39,7 @@ def hltv_rating_2(kpr, dpr, kast_pct, impact, adr) -> float:
 
 def build_dataset(demos_dir: Path):
     """Extract per-player per-match features + HLTV rating label."""
-    from src.services.demo_parser import parse_demo
+    from demo_cache import parse_demo_cached as parse_demo
 
     dem_files = sorted(demos_dir.glob("*.dem"))
     logger.info("Building player rating dataset from %d demos", len(dem_files))

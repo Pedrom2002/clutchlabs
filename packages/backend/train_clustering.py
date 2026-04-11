@@ -28,10 +28,10 @@ sys.path.insert(0, str(Path(__file__).parent))
 
 def build_player_dataset(demos_dir: Path):
     """Aggregate stats per player across all demos."""
-    from src.services.demo_parser import parse_demo
+    from demo_cache import parse_demo_cached as parse_demo
 
     dem_files = sorted(demos_dir.glob("*.dem"))
-    logger.info("Aggregating player stats from %d demos", len(dem_files))
+    logger.info("Aggregating player stats from %d demos (using cache)", len(dem_files))
 
     players_data = defaultdict(lambda: {
         "name": "",
