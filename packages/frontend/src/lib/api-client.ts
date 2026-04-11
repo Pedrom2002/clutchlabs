@@ -1,7 +1,8 @@
 import { useAuthStore } from '@/stores/auth-store'
 import type { TokenResponse } from '@/types/auth'
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1'
+export const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1'
+export const USE_MOCKS = process.env.NEXT_PUBLIC_USE_MOCKS === 'true'
 
 let refreshPromise: Promise<string | null> | null = null
 
@@ -105,7 +106,7 @@ class ApiClient {
     return this.fetch<T>(path, { method: 'DELETE' })
   }
 
-  async upload<T>(path: string, file: File): Promise<T> {
+  async upload<T>(path: string, file: File, _onProgress?: (pct: number) => void): Promise<T> {
     const tokens = this.getTokens()
 
     const buildFormData = () => {
@@ -157,3 +158,95 @@ export class ApiError extends Error {
 }
 
 export const api = new ApiClient()
+
+// ---------------------------------------------------------------------------
+// Domain types for new endpoints
+// ---------------------------------------------------------------------------
+
+export type TacticsStrategyType = 'default' | 'rush' | 'eco' | 'force' | 'execute'
+
+export interface TacticsRound {
+  round_number: number
+  side: 'CT' | 'T'
+  strategy_type: TacticsStrategyType
+  confidence: number
+  key_players: string[]
+  description: string
+}
+
+export interface TacticsResponse {
+  match_id: string
+  rounds: TacticsRound[]
+  team_tendencies: {
+    ct_preferred_sites: string[]
+    t_preferred_executes: string[]
+  }
+}
+
+export interface ScoutReport {
+  id: string
+  player_steam_id: string
+  rating: number
+  weaknesses: string[]
+  strengths: string[]
+  training_plan: string[]
+  created_at: string
+}
+
+export interface ScoutListParams {
+  player_steam_id?: string
+  limit?: number
+  offset?: number
+}
+
+export interface CreateScoutInput {
+  player_steam_id: string
+  rating: number
+  weaknesses: string[]
+  strengths: string[]
+  training_plan: string[]
+}
+
+export interface PlayerCompareRow {
+  player_steam_id: string
+  player_name: string
+  rating: number
+  kd: number
+  hs_pct: number
+  adr: number
+  util_damage: number
+}
+
+export interface PlayerCompareResponse {
+  players: PlayerCompareRow[]
+}
+
+// ---------------------------------------------------------------------------
+// Endpoint helpers — thin wrappers around the typed client
+// ---------------------------------------------------------------------------
+
+export const matchesApi = {
+  getTactics: (matchId: string) =>
+    api.get<TacticsResponse>(`/matches/${matchId}/tactics`),
+}
+
+export const scoutApi = {
+  list: (params: ScoutListParams = {}) => {
+    const search = new URLSearchParams()
+    if (params.player_steam_id) search.set('player_steam_id', params.player_steam_id)
+    if (params.limit != null) search.set('limit', String(params.limit))
+    if (params.offset != null) search.set('offset', String(params.offset))
+    const qs = search.toString()
+    return api.get<ScoutReport[]>(`/scout${qs ? `?${qs}` : ''}`)
+  },
+  get: (id: string) => api.get<ScoutReport>(`/scout/${id}`),
+  create: (data: CreateScoutInput) => api.post<ScoutReport>(`/scout`, data),
+  delete: (id: string) => api.delete<void>(`/scout/${id}`),
+}
+
+export const playersApi = {
+  compare: (steamIds: string[]) => {
+    const qs = steamIds.map((id) => `steam_ids=${encodeURIComponent(id)}`).join('&')
+    return api.get<PlayerCompareResponse>(`/players/compare?${qs}`)
+  },
+}

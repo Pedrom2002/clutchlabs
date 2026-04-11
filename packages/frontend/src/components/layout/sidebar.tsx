@@ -8,6 +8,7 @@ import {
   FileUp,
   Home,
   Menu,
+  Search,
   Settings,
   Trophy,
   Users,
@@ -22,6 +23,7 @@ const navItems = [
   { href: '/dashboard/demos', label: 'Demos', icon: FileUp },
   { href: '/dashboard/pro', label: 'Pro Matches', icon: Trophy },
   { href: '/dashboard/players', label: 'Players', icon: Users },
+  { href: '/dashboard/scout', label: 'Scout', icon: Search },
   { href: '/dashboard/analytics', label: 'Analytics', icon: BarChart3 },
   { href: '/dashboard/settings', label: 'Settings', icon: Settings },
 ]
