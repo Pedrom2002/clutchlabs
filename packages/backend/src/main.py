@@ -12,8 +12,18 @@ from slowapi.util import get_remote_address
 from src.config import settings
 from src.exceptions import http_exception_handler, validation_exception_handler
 from src.routers import (
-    archetypes, auth, beta, billing, demos, health, heatmap, ml, players,
-    pro_matches, sse, win_prob,
+    archetypes,
+    auth,
+    beta,
+    billing,
+    demos,
+    health,
+    heatmap,
+    ml,
+    players,
+    pro_matches,
+    sse,
+    win_prob,
 )
 
 # Structured logging
