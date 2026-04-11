@@ -1,35 +1,28 @@
 'use client'
 
-import { useId } from 'react'
-import { cn } from '@/lib/utils'
-
-export interface RadarPoint {
+/**
+ * Generic SVG radar chart for comparing multiple entities across shared metrics.
+ * No external dependencies — pure SVG so it works server-rendered and in any
+ * Tailwind theme. Values are expected already normalized to 0..100.
+ */
+export interface RadarSeries {
   label: string
-  value: number // 0..100
+  color: string
+  values: number[] // same length as metrics
 }
 
-interface RadarChartProps {
-  data: RadarPoint[]
+export interface RadarChartProps {
+  metrics: string[]
+  series: RadarSeries[]
   size?: number
-  levels?: number
-  className?: string
-  /** Optional second series rendered on top, for compare views */
-  compare?: RadarPoint[]
 }
 
-export function RadarChart({
-  data,
-  size = 280,
-  levels = 5,
-  className,
-  compare,
-}: RadarChartProps) {
-  const id = useId()
+export function RadarChart({ metrics, series, size = 320 }: RadarChartProps) {
   const cx = size / 2
   const cy = size / 2
-  const radius = size / 2 - 40
-
-  const angleStep = (2 * Math.PI) / data.length
+  const radius = size * 0.35
+  const levels = 5
+  const angleStep = (2 * Math.PI) / metrics.length
   const startAngle = -Math.PI / 2
 
   const point = (angle: number, r: number) => ({
@@ -37,109 +30,78 @@ export function RadarChart({
     y: cy + r * Math.sin(angle),
   })
 
-  const ring = (lvl: number) => {
-    const r = (radius / levels) * (lvl + 1)
-    return data
+  const rings = Array.from({ length: levels }, (_, i) => {
+    const r = (radius / levels) * (i + 1)
+    return metrics
       .map((_, j) => {
         const p = point(startAngle + j * angleStep, r)
         return `${p.x},${p.y}`
       })
       .join(' ')
-  }
+  })
 
-  const polygonOf = (series: RadarPoint[]) => {
-    const pts = series.map((d, i) => {
-      const r = Math.max(0, Math.min(1, d.value / 100)) * radius
-      return point(startAngle + i * angleStep, r)
-    })
-    return {
-      pts,
-      str: pts.map((p) => `${p.x},${p.y}`).join(' '),
-    }
-  }
-
-  const main = polygonOf(data)
-  const cmp = compare ? polygonOf(compare) : null
+  const axes = metrics.map((label, i) => {
+    const angle = startAngle + i * angleStep
+    const end = point(angle, radius + 12)
+    const labelPos = point(angle, radius + 26)
+    return { end, labelPos, label }
+  })
 
   return (
     <svg
-      width="100%"
+      width={size}
+      height={size}
       viewBox={`0 0 ${size} ${size}`}
-      className={cn('text-muted-foreground', className)}
+      className="mx-auto"
       role="img"
-      aria-label="Performance radar chart"
+      aria-label="Radar chart"
     >
-      <defs>
-        <radialGradient id={`${id}-grad`} cx="50%" cy="50%" r="50%">
-          <stop offset="0%" stopColor="hsl(24 100% 50%)" stopOpacity={0.5} />
-          <stop offset="100%" stopColor="hsl(24 100% 50%)" stopOpacity={0.1} />
-        </radialGradient>
-      </defs>
-
-      {Array.from({ length: levels }).map((_, lvl) => (
+      {rings.map((points, i) => (
         <polygon
-          key={lvl}
-          points={ring(lvl)}
+          key={i}
+          points={points}
           fill="none"
-          stroke="currentColor"
-          strokeOpacity={0.18}
-          strokeWidth={1}
+          stroke="rgba(255,255,255,0.08)"
+          strokeWidth="1"
         />
       ))}
-
-      {data.map((d, i) => {
-        const angle = startAngle + i * angleStep
-        const end = point(angle, radius)
-        const labelPos = point(angle, radius + 20)
+      {axes.map((a, i) => (
+        <g key={i}>
+          <line
+            x1={cx}
+            y1={cy}
+            x2={a.end.x}
+            y2={a.end.y}
+            stroke="rgba(255,255,255,0.08)"
+            strokeWidth="1"
+          />
+          <text
+            x={a.labelPos.x}
+            y={a.labelPos.y}
+            textAnchor="middle"
+            dominantBaseline="middle"
+            className="fill-text-muted"
+            fontSize="10"
+          >
+            {a.label}
+          </text>
+        </g>
+      ))}
+      {series.map((s, idx) => {
+        const pts = s.values.map((v, i) => {
+          const r = (Math.max(0, Math.min(100, v)) / 100) * radius
+          return point(startAngle + i * angleStep, r)
+        })
+        const path = pts.map((p) => `${p.x},${p.y}`).join(' ')
         return (
-          <g key={d.label}>
-            <line
-              x1={cx}
-              y1={cy}
-              x2={end.x}
-              y2={end.y}
-              stroke="currentColor"
-              strokeOpacity={0.18}
-            />
-            <text
-              x={labelPos.x}
-              y={labelPos.y}
-              textAnchor="middle"
-              dominantBaseline="middle"
-              fontSize={11}
-              fill="currentColor"
-              className="font-medium"
-            >
-              {d.label}
-            </text>
+          <g key={idx}>
+            <polygon points={path} fill={`${s.color}33`} stroke={s.color} strokeWidth="2" />
+            {pts.map((p, i) => (
+              <circle key={i} cx={p.x} cy={p.y} r="3" fill={s.color} />
+            ))}
           </g>
         )
       })}
-
-      <polygon
-        points={main.str}
-        fill={`url(#${id}-grad)`}
-        stroke="hsl(24 100% 50%)"
-        strokeWidth={2}
-      />
-      {main.pts.map((p, i) => (
-        <circle key={i} cx={p.x} cy={p.y} r={3} fill="hsl(24 100% 50%)" />
-      ))}
-
-      {cmp && (
-        <>
-          <polygon
-            points={cmp.str}
-            fill="hsl(192 100% 50% / 0.15)"
-            stroke="hsl(192 100% 50%)"
-            strokeWidth={2}
-            strokeDasharray="4 3"
-          />
-          {cmp.pts.map((p, i) => (
-            <circle key={i} cx={p.x} cy={p.y} r={3} fill="hsl(192 100% 50%)" />
-          ))}
-        </>
-      )}
     </svg>
   )
 }

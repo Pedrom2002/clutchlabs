@@ -1,61 +1,55 @@
 'use client'
 
-import { AlertCircle } from 'lucide-react'
-import { useTranslations } from 'next-intl'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
-import type { WeaknessProfile } from '@/types/training'
-import { Skeleton } from '@/components/ui/skeleton'
+import { AlertTriangle, TrendingUp } from 'lucide-react'
 
-interface Props {
-  profile: WeaknessProfile | null | undefined
-  loading?: boolean
+interface WeaknessProfileProps {
+  weaknesses: string[]
+  strengths: string[]
 }
 
-export function WeaknessProfileCard({ profile, loading }: Props) {
-  const t = useTranslations('player')
-
+export function WeaknessProfile({ weaknesses, strengths }: WeaknessProfileProps) {
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2 text-base">
-          <AlertCircle className="h-4 w-4 text-warning" />
-          {t('weaknessProfile')}
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        {loading && <Skeleton className="h-24 w-full" />}
-        {!loading && profile && (
-          <>
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <div className="mb-1 flex items-center gap-2">
-                  <Badge variant="critical">{t('primary')}</Badge>
-                  <span className="text-sm font-semibold">{profile.primary.label}</span>
-                </div>
-                <p className="text-xs text-muted-foreground">{profile.primary.description}</p>
-              </div>
-              <span className="font-mono text-xs text-muted-foreground">
-                {Math.round(profile.primary.confidence * 100)}%
-              </span>
-            </div>
-            {profile.secondary && (
-              <div className="flex items-start justify-between gap-3 border-t border-border pt-3">
-                <div>
-                  <div className="mb-1 flex items-center gap-2">
-                    <Badge variant="major">{t('secondary')}</Badge>
-                    <span className="text-sm font-semibold">{profile.secondary.label}</span>
-                  </div>
-                  <p className="text-xs text-muted-foreground">{profile.secondary.description}</p>
-                </div>
-                <span className="font-mono text-xs text-muted-foreground">
-                  {Math.round(profile.secondary.confidence * 100)}%
-                </span>
-              </div>
-            )}
-          </>
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div className="bg-bg-card border border-border rounded-xl p-4">
+        <div className="flex items-center gap-2 mb-3 text-red-400 text-sm font-medium">
+          <AlertTriangle className="h-4 w-4" />
+          Weaknesses
+        </div>
+        {weaknesses.length === 0 ? (
+          <p className="text-text-dim text-xs italic">No weaknesses recorded</p>
+        ) : (
+          <ul className="space-y-1.5">
+            {weaknesses.map((w, i) => (
+              <li
+                key={i}
+                className="text-sm text-text-muted pl-3 border-l-2 border-red-500/40"
+              >
+                {w}
+              </li>
+            ))}
+          </ul>
         )}
-      </CardContent>
-    </Card>
+      </div>
+      <div className="bg-bg-card border border-border rounded-xl p-4">
+        <div className="flex items-center gap-2 mb-3 text-green-400 text-sm font-medium">
+          <TrendingUp className="h-4 w-4" />
+          Strengths
+        </div>
+        {strengths.length === 0 ? (
+          <p className="text-text-dim text-xs italic">No strengths recorded</p>
+        ) : (
+          <ul className="space-y-1.5">
+            {strengths.map((s, i) => (
+              <li
+                key={i}
+                className="text-sm text-text-muted pl-3 border-l-2 border-green-500/40"
+              >
+                {s}
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    </div>
   )
 }
