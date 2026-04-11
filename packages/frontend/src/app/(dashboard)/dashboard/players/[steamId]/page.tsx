@@ -15,8 +15,8 @@ import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { PageHeader } from '@/components/common/page-header'
 import { StatCard } from '@/components/common/stat-card'
-import { RadarChart } from '@/components/charts/radar-chart'
-import { WeaknessProfileCard } from '@/components/analytics/weakness-profile'
+import { RadarChart, type RadarSeries } from '@/components/charts/radar-chart'
+import { WeaknessProfile } from '@/components/analytics/weakness-profile'
 
 export default function PlayerProfilePage() {
   const { steamId } = useParams<{ steamId: string }>()
@@ -53,19 +53,26 @@ export default function PlayerProfilePage() {
     )
   }
 
-  const radarData = [
-    { label: t('rolesAim'), value: Math.min(stats.avg_headshot_pct * 1.5, 100) },
-    { label: t('rolesPosition'), value: Math.min(stats.avg_survival_rate, 100) },
-    { label: t('rolesSense'), value: Math.min(stats.avg_kast_pct, 100) },
-    { label: t('rolesClutch'), value: Math.min(stats.avg_impact_rating * 50, 100) },
-    {
-      label: t('rolesUtility'),
-      value: Math.min(
-        (stats.total_flash_assists / Math.max(stats.total_rounds, 1)) * 500,
-        100
-      ),
-    },
+  const radarMetrics = [
+    t('rolesAim'),
+    t('rolesPosition'),
+    t('rolesSense'),
+    t('rolesClutch'),
+    t('rolesUtility'),
   ]
+  const radarValues = [
+    Math.min(stats.avg_headshot_pct * 1.5, 100),
+    Math.min(stats.avg_survival_rate, 100),
+    Math.min(stats.avg_kast_pct, 100),
+    Math.min(stats.avg_impact_rating * 50, 100),
+    Math.min((stats.total_flash_assists / Math.max(stats.total_rounds, 1)) * 500, 100),
+  ]
+  const radarSeries: RadarSeries[] = [
+    { label: stats.player_name, color: '#3b82f6', values: radarValues },
+  ]
+  const weaknessItems = weakness
+    ? [weakness.primary?.label, weakness.secondary?.label].filter((l): l is string => !!l)
+    : []
 
   const mapEntries = Object.entries(stats.maps_played).sort((a, b) => b[1] - a[1])
 
@@ -112,10 +119,14 @@ export default function PlayerProfilePage() {
             <CardTitle className="text-base">{t('performanceRadar')}</CardTitle>
           </CardHeader>
           <CardContent>
-            <RadarChart data={radarData} />
+            <RadarChart metrics={radarMetrics} series={radarSeries} />
           </CardContent>
         </Card>
-        <WeaknessProfileCard profile={weakness ?? null} loading={weaknessLoading} />
+        {weaknessLoading ? (
+          <Skeleton className="h-40 w-full" />
+        ) : (
+          <WeaknessProfile weaknesses={weaknessItems} strengths={[]} />
+        )}
       </div>
 
       {/* Career totals */}
