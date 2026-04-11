@@ -17,6 +17,7 @@ from src.models.round import Round
 from src.models.team import Team
 from src.models.team_player import TeamPlayer
 from src.models.user import User
+from src.models.win_prob_impact import WinProbImpact
 
 __all__ = [
     "Base",
@@ -37,4 +38,5 @@ __all__ = [
     "Team",
     "TeamPlayer",
     "User",
+    "WinProbImpact",
 ]

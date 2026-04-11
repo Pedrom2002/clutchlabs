@@ -309,6 +309,50 @@ async def _compute_and_store_ratings(match_id: str, parsed) -> None:
         logger.info("Computed ratings for match %s (%d players)", match_id, len(parsed.players))
 
 
+async def _compute_and_store_win_prob_impacts(match_id: str, parsed) -> int:
+    """Compute win probability delta for each kill and store in DB."""
+    from src.database import _get_engine, _get_session_factory
+    from src.models.win_prob_impact import WinProbImpact
+    from src.services.win_prob_service import compute_win_prob_impacts
+
+    impacts = compute_win_prob_impacts(parsed)
+    if not impacts:
+        return 0
+
+    _get_engine()
+    match_uuid = _to_uuid(match_id)
+
+    async with _get_session_factory()() as session:
+        for imp in impacts:
+            session.add(
+                WinProbImpact(
+                    match_id=match_uuid,
+                    round_number=imp.round_number,
+                    tick=imp.tick,
+                    victim_steam_id=imp.victim_steam_id,
+                    victim_name=imp.victim_name,
+                    victim_side=imp.victim_side,
+                    attacker_steam_id=imp.attacker_steam_id,
+                    attacker_name=imp.attacker_name,
+                    prob_before=imp.prob_before,
+                    prob_after=imp.prob_after,
+                    win_delta=imp.win_delta,
+                    alive_t_before=imp.alive_t_before,
+                    alive_ct_before=imp.alive_ct_before,
+                    bomb_planted=imp.bomb_planted,
+                    weapon=imp.weapon,
+                    headshot=imp.headshot,
+                    was_traded=imp.was_traded,
+                    victim_x=imp.victim_x,
+                    victim_y=imp.victim_y,
+                    victim_z=imp.victim_z,
+                )
+            )
+        await session.commit()
+
+    return len(impacts)
+
+
 @celery_app.task(bind=True, max_retries=3, name="src.tasks.demo_processing.process_demo")
 def process_demo(self, demo_id: str, s3_key: str):
     """
@@ -374,6 +418,10 @@ def process_demo(self, demo_id: str, s3_key: str):
         asyncio.run(_update_demo_status(demo_id, "running_models"))
         num_errors = asyncio.run(_run_ml_pipeline(match_id, org_id, parsed))
         logger.info("Demo %s: detected %d errors via ML pipeline", demo_id, num_errors)
+
+        # Step 5.1: Compute win probability impact for each kill
+        num_impacts = asyncio.run(_compute_and_store_win_prob_impacts(match_id, parsed))
+        logger.info("Demo %s: stored %d win prob impacts", demo_id, num_impacts)
 
         # Step 6: Mark as completed
         asyncio.run(_update_demo_status(demo_id, "completed"))
