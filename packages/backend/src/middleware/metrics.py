@@ -7,7 +7,7 @@ method / route / status_code. The /metrics route is wired up in main.py.
 from __future__ import annotations
 
 import time
-from typing import Callable
+from collections.abc import Callable  # noqa: TC003
 
 from fastapi import Request, Response
 from prometheus_client import (
@@ -76,9 +76,7 @@ async def prometheus_middleware(request: Request, call_next: Callable) -> Respon
     REQUEST_COUNT.labels(method=method, endpoint=endpoint, status_code=status).inc()
     if response.status_code >= 500:
         REQUEST_ERRORS.labels(method=method, endpoint=endpoint, status_code=status).inc()
-    REQUEST_LATENCY.labels(method=method, endpoint=endpoint).observe(
-        time.perf_counter() - start
-    )
+    REQUEST_LATENCY.labels(method=method, endpoint=endpoint).observe(time.perf_counter() - start)
     return response
 
 

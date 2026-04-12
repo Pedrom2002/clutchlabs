@@ -3,7 +3,7 @@
 import { useParams } from 'next/navigation'
 import { useQuery } from '@tanstack/react-query'
 import { useTranslations } from 'next-intl'
-import { AlertCircle, Brain, Loader2, MapPin, Users } from 'lucide-react'
+import { AlertCircle, Brain, MapPin, Users } from 'lucide-react'
 import { matchesApi, type TacticsResponse, type TacticsStrategyType } from '@/lib/api-client'
 
 const STRATEGY_COLORS: Record<TacticsStrategyType, string> = {

@@ -7,13 +7,12 @@ from collections import Counter
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.ext.asyncio import AsyncSession  # noqa: TC002
 from sqlalchemy.orm import selectinload
 
 from src.database import get_db
 from src.models.match import Match
 from src.models.player_match_stats import PlayerMatchStats
-from src.models.round import Round
 
 router = APIRouter(tags=["tactics"])
 
@@ -114,9 +113,7 @@ async def match_tactics(
         raise HTTPException(status_code=400, detail="Invalid match id") from exc
 
     res = await db.execute(
-        select(Match)
-        .where(Match.id == match_uuid)
-        .options(selectinload(Match.rounds))
+        select(Match).where(Match.id == match_uuid).options(selectinload(Match.rounds))
     )
     match = res.scalar_one_or_none()
     if match is None:
@@ -181,9 +178,7 @@ async def match_tactics(
         )
 
     ct_preferred = [site for site, _ in ct_site_counter.most_common(2)] or ["A", "B"]
-    t_executes = [
-        f"{site} site execute" for site, _ in t_execute_counter.most_common(3)
-    ] or []
+    t_executes = [f"{site} site execute" for site, _ in t_execute_counter.most_common(3)] or []
 
     return {
         "match_id": str(match.id),

@@ -112,6 +112,7 @@ interface AuthFixtures {
  *   import { test, expect } from '../fixtures/auth'
  *   test('foo', async ({ authenticatedPage }) => { ... })
  */
+/* eslint-disable react-hooks/rules-of-hooks -- Playwright fixture `use` is not a React hook */
 export const test = base.extend<AuthFixtures>({
   testUser: async ({ request }, use, testInfo) => {
     const user = makeTestUser(testInfo.project.name)

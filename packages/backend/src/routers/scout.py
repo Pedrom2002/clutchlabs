@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import func, select
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.ext.asyncio import AsyncSession  # noqa: TC002
 
 from src.database import get_db
 from src.middleware.auth import get_current_user
@@ -21,9 +21,7 @@ if TYPE_CHECKING:
 router = APIRouter(prefix="/scout", tags=["scout"])
 
 
-async def _compute_report_fields(
-    db: AsyncSession, org_id: uuid.UUID, player_steam_id: str
-) -> dict:
+async def _compute_report_fields(db: AsyncSession, org_id: uuid.UUID, player_steam_id: str) -> dict:
     """Aggregate per-org player stats to produce rating/strengths/weaknesses.
 
     Derived from PlayerMatchStats — if the player has no stats for the org,
@@ -74,9 +72,7 @@ async def _compute_report_fields(
             "rating": 50.0,
             "strengths": [],
             "weaknesses": ["No match data available for this player yet"],
-            "training_plan": [
-                "Upload matches with this player to generate a full report"
-            ],
+            "training_plan": ["Upload matches with this player to generate a full report"],
         }
 
     # Assume an average of 24 rounds per match; fallback 1 for division safety
@@ -160,7 +156,7 @@ async def _compute_report_fields(
 @router.post("", response_model=ScoutReportResponse, status_code=201)
 async def create_scout_report(
     payload: ScoutReportCreate,
-    current_user: "TokenPayload" = Depends(get_current_user),
+    current_user: TokenPayload = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     """Create a scout report for a player within the current organization."""
@@ -188,7 +184,7 @@ async def list_scout_reports(
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=20, ge=1, le=100),
     player_steam_id: str | None = Query(default=None),
-    current_user: "TokenPayload" = Depends(get_current_user),
+    current_user: TokenPayload = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     """List scout reports for the current organization."""
@@ -220,15 +216,13 @@ async def list_scout_reports(
 @router.get("/{report_id}", response_model=ScoutReportResponse)
 async def get_scout_report(
     report_id: uuid.UUID,
-    current_user: "TokenPayload" = Depends(get_current_user),
+    current_user: TokenPayload = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     """Fetch a single scout report by id (scoped to org)."""
     org_id = uuid.UUID(current_user.org_id)
     res = await db.execute(
-        select(ScoutReport).where(
-            ScoutReport.id == report_id, ScoutReport.org_id == org_id
-        )
+        select(ScoutReport).where(ScoutReport.id == report_id, ScoutReport.org_id == org_id)
     )
     report = res.scalar_one_or_none()
     if not report:
@@ -239,15 +233,13 @@ async def get_scout_report(
 @router.delete("/{report_id}", status_code=204)
 async def delete_scout_report(
     report_id: uuid.UUID,
-    current_user: "TokenPayload" = Depends(get_current_user),
+    current_user: TokenPayload = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     """Delete a scout report (scoped to org)."""
     org_id = uuid.UUID(current_user.org_id)
     res = await db.execute(
-        select(ScoutReport).where(
-            ScoutReport.id == report_id, ScoutReport.org_id == org_id
-        )
+        select(ScoutReport).where(ScoutReport.id == report_id, ScoutReport.org_id == org_id)
     )
     report = res.scalar_one_or_none()
     if not report:

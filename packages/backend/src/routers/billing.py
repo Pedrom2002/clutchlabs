@@ -152,9 +152,7 @@ async def _update_org_by_customer(
     if not customer_id:
         return
     await db.execute(
-        update(Organization)
-        .where(Organization.stripe_customer_id == customer_id)
-        .values(**values)
+        update(Organization).where(Organization.stripe_customer_id == customer_id).values(**values)
     )
     await db.commit()
 
@@ -217,7 +215,9 @@ async def stripe_webhook(
 
         elif event_type == "payment_intent.succeeded":
             customer_id = data.get("customer")
-            logger.info("Payment succeeded: customer=%s amount=%s", customer_id, data.get("amount_received"))
+            logger.info(
+                "Payment succeeded: customer=%s amount=%s", customer_id, data.get("amount_received")
+            )
             await _update_org_by_customer(db, customer_id, subscription_status="active")
 
         elif event_type == "customer.subscription.created":

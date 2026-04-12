@@ -9,7 +9,7 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.ext.asyncio import AsyncSession  # noqa: TC002
 
 from src.database import get_db
 from src.schemas.ml import (
@@ -26,18 +26,16 @@ logger = logging.getLogger(__name__)
 # on a pip-installed wheel.
 # ---------------------------------------------------------------------------
 
-_ML_MODELS_PKG = (
-    Path(__file__).resolve().parent.parent.parent.parent / "ml-models"
-)
+_ML_MODELS_PKG = Path(__file__).resolve().parent.parent.parent.parent / "ml-models"
 if _ML_MODELS_PKG.exists():
     p = str(_ML_MODELS_PKG)
     if p not in sys.path:
         sys.path.insert(0, p)
 
 try:
+    from ml_models.explainability import explain_prediction as _explain_prediction
     from ml_models.registry import get_model as _registry_get_model
     from ml_models.registry import list_models as _registry_list_models
-    from ml_models.explainability import explain_prediction as _explain_prediction
 except Exception as e:  # pragma: no cover - logged at runtime
     logger.warning("ml_models package not importable: %s", e)
     _registry_get_model = None
@@ -105,8 +103,12 @@ class ShapValueItem(BaseModel):
 
 
 class ExplainRequest(BaseModel):
-    model: str = Field(..., description="Registered model name (e.g. 'win_prob' or 'player_rating')")
-    sample_data: dict[str, Any] = Field(default_factory=dict, description="Feature dict for the row to explain")
+    model: str = Field(
+        ..., description="Registered model name (e.g. 'win_prob' or 'player_rating')"
+    )
+    sample_data: dict[str, Any] = Field(
+        default_factory=dict, description="Feature dict for the row to explain"
+    )
 
 
 class ExplainResponse(BaseModel):
@@ -163,10 +165,10 @@ async def explain(request: ExplainRequest) -> ExplainResponse:
     try:
         result = _explain_prediction(request.model, request.sample_data)
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:  # pragma: no cover - last resort
         logger.exception("Explainability failed")
-        raise HTTPException(status_code=500, detail=f"Explainability error: {e}")
+        raise HTTPException(status_code=500, detail=f"Explainability error: {e}") from e
 
     return ExplainResponse(
         model=result["model"],
