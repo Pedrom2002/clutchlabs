@@ -21,7 +21,7 @@ AI-powered analytics platform for Counter-Strike 2 demos. Upload demos, get win 
 - **Error Detection** — Utility/timing mistakes via Mamba SSM classifier (81% accuracy)
 - **Tactical Insights** — Economy charts, heatmaps, radar comparisons, strategy classification
 - **Scout Reports** — Generate scouting profiles with strengths, weaknesses, training plans
-- **Pro Match Pipeline** — Auto-ingest HLTV pro demos via scraper + Celery Beat
+- **Pro Match Pipeline** — HLTV pro demo scraper + manual ingestion pipeline
 - **Billing** — Stripe integration (Solo/Team/Pro tiers) with webhook handling
 - **Real-Time** — SSE for live parsing progress and match status updates
 
