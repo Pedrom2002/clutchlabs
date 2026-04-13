@@ -2,6 +2,8 @@
 
 Full-stack analytics platform for Counter-Strike 2. Upload match demos, get win probability predictions, player ratings, error detection, and tactical analysis powered by trained ML models.
 
+> **Source-available for portfolio review.** Licensed under [PolyForm Noncommercial 1.0.0](LICENSE) — free for personal, research, and educational use. Commercial use requires a separate license (contact: pedrom02.dev@gmail.com). Trained model checkpoints and the proprietary demo dataset are not included in this repository.
+
 ## Tech Stack
 
 | Layer | Technology |
