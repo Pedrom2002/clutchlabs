@@ -60,7 +60,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       # ----- Python + uv + backend deps -----
-      - uses: astral-sh/setup-uv@v5
+      - uses: astral-sh/setup-uv@v7
         with:
           version: "latest"
       - uses: actions/setup-python@v5
