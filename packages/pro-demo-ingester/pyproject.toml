@@ -4,7 +4,7 @@ version = "0.1.0"
 description = "AI CS2 Analytics — Pro Demo Ingestion Pipeline"
 requires-python = ">=3.12"
 dependencies = [
-    "httpx>=0.28.0",
+    "httpx>=0.28.1",
     "selectolax>=0.3.0",
     "rarfile>=4.0",
     "tqdm>=4.60.0",
