@@ -11,8 +11,8 @@
     "format": "prettier --write \"packages/frontend/**/*.{ts,tsx,json,css}\""
   },
   "devDependencies": {
-    "turbo": "^2.4.0",
-    "prettier": "^3.5.0",
-    "prettier-plugin-tailwindcss": "^0.6.0"
+    "turbo": "^2.9.6",
+    "prettier": "^3.8.2",
+    "prettier-plugin-tailwindcss": "^0.7.2"
   }
 }
